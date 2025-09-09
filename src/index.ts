@@ -1,46 +1,72 @@
+// Import alias setup for production (must be first)
+import './alias';
+
 import express, { Application, Request, Response, NextFunction } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
-import dotenv from 'dotenv';
-import path from 'path';
+import cors from "cors";
+import helmet from "helmet";
+import morgan from "morgan";
+import dotenv from "dotenv";
+import session from "express-session";
+import { ExpressPeerServer } from "peer";
+import { app, server } from "@/socket/socket-server";  // Sử dụng path mapping @
+import routes from "@/routes";
+import connectDB from '@/utils/db';
 
-// Import routes
-import routes from './routes';
-
-// Load environment variables
 dotenv.config();
 
-const app: Application = express();
-const PORT: number = parseInt(process.env.PORT || '3000', 10);
+const PORT: number = parseInt(process.env.PORT || "8080", 10);
 
 // Middleware
-app.use(helmet()); // Security middleware
-app.use(cors()); // Enable CORS
-app.use(morgan('combined')); // Logging
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+app.use(helmet());
+app.use(cors());
+app.use(morgan("combined"));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Serve static files
-app.use('/public', express.static(path.join(__dirname, '../public')));
+const corsOptions = {
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+app.use(cors(corsOptions));
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "default_session_secret",
+    resave: false,
+    saveUninitialized: true,
+  })
+);
+
+// Tích hợp PeerServer vào HTTP server
+const peerServer = ExpressPeerServer(server, {
+  path: "/peerjs",
+  allow_discovery: true,
+});
+app.use("/peerjs", peerServer);
+
+peerServer.on("connection", (peer: any) => {
+  console.log("Peer connected:", peer.id);
+});
+peerServer.on("disconnect", (peer: any) => {
+  console.log("Peer disconnected:", peer.id);
+});
 
 // Routes
-app.use('/api/v1', routes);
+app.use("/api/v1", routes);
 
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get("/testServer", (req: Request, res: Response) => {
   res.status(200).json({
-    status: 'OK',
-    message: 'Hanabi Backend is running!',
-    timestamp: new Date().toISOString()
+    status: "OK",
+    message: "Hanabi Backend chạy mượt!",
+    timestamp: new Date().toISOString(),
   });
 });
 
-// 404 handler
-app.use('*', (req: Request, res: Response) => {
+app.use("*", (req: Request, res: Response) => {
   res.status(404).json({
-    error: 'Route not found',
-    message: `The requested route ${req.originalUrl} was not found.`
+    error: "Route not found",
+    message: `The requested route ${req.originalUrl} was not found.`,
   });
 });
 
@@ -48,16 +74,18 @@ app.use('*', (req: Request, res: Response) => {
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
   res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong!'
+    error: "Internal Server Error",
+    message:
+      process.env.NODE_ENV === "development" ? err.message : "hãy kiểm tra lại!",
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Hanabi Backend server is running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+// Start server (Express + Socket.IO + PeerJS chung cổng)
+server.listen(PORT, async () => {
+  await connectDB();
+  console.log(`🚀 Hanabi Backend running on port ${PORT}`);
+  console.log(` Health check: http://localhost:${PORT}/testServer`);
+  console.log(` Môi trường: ${process.env.NODE_ENV || "development"}`);
 });
 
 export default app;

@@ -27,14 +27,17 @@
     "baseUrl": "./src",
     "paths": {
       "@/*": ["*"],
-      "@config/*": ["config/*"],
       "@controllers/*": ["controllers/*"],
       "@middleware/*": ["middleware/*"],
       "@models/*": ["models/*"],
       "@routes/*": ["routes/*"],
       "@utils/*": ["utils/*"],
-      "@types/*": ["types/*"]
+      "@types-/*": ["types/*"],
+      "@validators/*": ["validators/*"]
     }
+  },
+  "ts-node": {
+    "require": ["tsconfig-paths/register"]
   },
   "include": [
     "src/**/*"

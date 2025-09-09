@@ -1,25 +1,15 @@
-import { Router, Request, Response } from 'express';
-import { ApiResponse } from '../types';
+import { Router } from 'express';
+import userRoutes from './user.route';
+import authRoutes from './auth.route';
+import postRoutes from './post.route';
 
 const router: Router = Router();
 
-// Basic route
-router.get('/', (req: Request, res: Response) => {
-  const response: ApiResponse = {
-    success: true,
-    message: 'Hanabi Backend API v1.0',
-    data: {
-      status: 'OK',
-      version: '1.0.0',
-      endpoints: [
-        'GET /api/v1/',
-        'GET /health'
-      ]
-    },
-    timestamp: new Date().toISOString()
-  };
-
-  res.json(response);
-});
+// Auth routes
+router.use('/auth', authRoutes);
+// User routes
+router.use('/users', userRoutes);
+// Post routes
+router.use('/posts', postRoutes);
 
 export default router;
