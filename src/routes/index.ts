@@ -1,25 +1,15 @@
-import { Router, Request, Response } from 'express';
-import { ApiResponse } from '../types';
-import { register, login } from '../controllers/auth.controller';
+import { Router } from 'express';
 import userRoutes from './user.route';
+import authRoutes from './auth.route';
+import postRoutes from './post.route';
 
 const router: Router = Router();
 
-// Health check route
-router.get('/', (req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    message: 'Hanabi API is running',
-    data: null,
-    timestamp: new Date().toISOString()
-  } as ApiResponse);
-});
-
 // Auth routes
-router.post('/auth/register', register);
-router.post('/auth/login', login);
-
+router.use('/auth', authRoutes);
 // User routes
 router.use('/users', userRoutes);
+// Post routes
+router.use('/posts', postRoutes);
 
 export default router;

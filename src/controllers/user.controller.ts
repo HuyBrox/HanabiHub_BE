@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
 import User from '@models/user.model';
-import { ApiResponse, UpdateUserRequest } from '../types';
+import { ApiResponse, UpdateUserRequest, IUser } from '../types';
 
 // [GET] /api/users/:id - Lấy thông tin user
 export const getUser = async (req: Request, res: Response) => {
   try {
     const userId = req.params.id;
-    const user = await User.findById(userId).select("-password");
+    const user: IUser | null = await User.findById(userId).select("-password");
 
     if (!user) {
       return res.status(404).json({
@@ -40,7 +40,7 @@ export const updateUser = async (req: Request, res: Response) => {
     const userId = req.params.id;
     const updateData: UpdateUserRequest = req.body;
 
-    const updatedUser = await User.findByIdAndUpdate(
+    const updatedUser: IUser | null = await User.findByIdAndUpdate(
       userId,
       updateData,
       { new: true, runValidators: true }

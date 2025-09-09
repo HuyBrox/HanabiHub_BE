@@ -2,14 +2,13 @@ import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthRequest, ApiResponse } from '../types';
 
-export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
+export const isAuth = (req: AuthRequest, res: Response, next: NextFunction): void => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
-
     if (!token) {
       res.status(401).json({
         success: false,
-        message: 'Access denied. No token provided.',
+        message: 'Không có token, truy cập bị từ chối.',
         data: null,
         timestamp: new Date().toISOString()
       } as ApiResponse);
@@ -22,7 +21,7 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
   } catch (error) {
     res.status(401).json({
       success: false,
-      message: 'Invalid token',
+      message: 'Token không hợp lệ',
       data: null,
       timestamp: new Date().toISOString()
     } as ApiResponse);

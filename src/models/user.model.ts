@@ -1,22 +1,7 @@
-import mongoose from 'mongoose';
+import mongoose, { Schema, Model } from 'mongoose';
+import { IUser, UserLevel } from '@/types/user.types';
 
-interface IUser {
-    fullname: string;
-    username: string;
-    email: string;
-    password: string;
-    avatar?: string;
-    role?: 'user' | 'admin';
-    phone?: string;
-    address?: string;
-    course?: mongoose.Schema.Types.ObjectId;
-    lastActiveAt?: Date;
-    posts?: number;
-    likes?: number;
-    recentActivity?: string[];
-}
-
-const UserSchema = new mongoose.Schema({
+const UserSchema = new Schema<IUser>({
     fullname: {
         type: String,
         required: true,
@@ -39,10 +24,10 @@ const UserSchema = new mongoose.Schema({
         type: String,
         default: 'https://png.pngtree.com/png-vector/20190623/ourlarge/pngtree-accountavataruser--flat-color-icon--vector-icon-banner-templ-png-image_1491720.jpg',
     },
-    role: {
+    bio: {
         type: String,
-        default: 'user',
-        enum: ['user', 'admin'],
+        max: 300,
+        default: '',
     },
     phone: {
         type: String,
@@ -62,17 +47,41 @@ const UserSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
-    likes: {
-        type: Number,
-        default: 0,
-    },
-    recentActivity: [
+    followers: [
         {
-            type: String,
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
         }
     ],
+    following: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+        }
+    ],
+    //trình độ học vấn
+    level: {
+        type: String,
+        enum: ['N5', 'N4', 'N3', 'N2', 'N1'] as UserLevel[],
+        default: 'N5' as UserLevel,
+    },
+    isActive: {
+        type: Boolean,
+        default: true,
+    },
+    isAdmin: {
+        type: Boolean,
+        default: false,
+    },
+
+    // Hoạt động gần đây
+    // recentActivity: [
+    //     {
+    //         type: String,
+    //     }
+    // ],
 
 }, { timestamps: true });
 
-const User = mongoose.model('User', UserSchema);
+const User: Model<IUser> = mongoose.model<IUser>('User', UserSchema);
 export default User;
