@@ -55,7 +55,7 @@ export async function sendOtpEmail(email: string, otp: string | number): Promise
     <p style="text-align: center; font-size: 14px; color: #555;">Liên hệ hỗ trợ:</p>
     <p style="text-align: center; font-size: 14px; color: #555;">
         Email: <a href="mailto:huybrox@gmail.com" style="color: #0056b3;">huybrox@gmail.com </a><br>
-                <a href="mailto:loctrunghoa@gmail.com" style="color: #0056b3;padding-left: 60px;">    loctrunghoa@gmail.com </a><br>
+
         Facebook: <a href="https://www.facebook.com/huybrox/" style=" color: #0056b3;">Facebook nhà phát triển</a>
     </p>
 </div>
