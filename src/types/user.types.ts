@@ -36,6 +36,9 @@ export interface CreateUserRequest {
   email: string;
   username: string;
   password: string;
+  fullname: string;
+  //xác thực mật khẩu
+  confirmPassword: string;
 }
 
 export interface LoginRequest {
@@ -50,7 +53,14 @@ export interface UpdateUserRequest {
   phone?: string;
   address?: string;
   level?: UserLevel;
+  //không cho update email và password
 }
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
+}
+//
 
 // Utility types để tái sử dụng
 //omit là bỏ thuộc tính, pick là chọn thuộc tính

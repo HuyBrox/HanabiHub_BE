@@ -26,6 +26,7 @@ export interface ILessonBase {
   jsonTask?: ITaskData;                // dữ liệu task (nếu type là task)
   videoUrl?: string;                   // URL video (nếu type là video)
   Comments: Types.ObjectId[];          // ref tới Comment
+  userCompleted: Types.ObjectId[];    // ref tới User đã hoàn thành bài học
 }
 
 // Interface cho Mongoose Document (kế thừa Document)

@@ -1,8 +1,27 @@
 import { Request, Response } from 'express';
 import User from '@models/user.model';
+import Otp from '@models/opt.model';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { AuthRequest, ApiResponse, LoginRequest, CreateUserRequest } from '../types';
+// import { getReciverSocketIds, io } from "../socket/socket.js";
+
+// Helper function để verify OTP
+const verifyOtp = async (email: string, otp: string): Promise<boolean> => {
+  try {
+    const otpRecord = await Otp.findOne({ email, otp });
+    if (!otpRecord) {
+      return false;
+    }
+
+    // Xóa OTP sau khi verify thành công
+    await Otp.deleteOne({ _id: otpRecord._id });
+    return true;
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    return false;
+  }
+};
 
 // Đăng ký
 export const register = async (req: Request, res: Response) => {
@@ -105,4 +124,46 @@ export const login = async (req: Request, res: Response) => {
       timestamp: new Date().toISOString()
     } as ApiResponse);
   }
+};
+
+export const verifyOtpForRegistration = async (req: Request, res: Response) => {
+    try {
+        const { email, otp } = req.body;
+
+        // Validation
+        if (!email || !otp) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp email và OTP!',
+                data: null,
+                timestamp: new Date().toISOString()
+            } as ApiResponse);
+        }
+
+        const isOtpValid = await verifyOtp(email, otp);
+        if (!isOtpValid) {
+            return res.status(400).json({
+                success: false,
+                message: 'OTP không hợp lệ hoặc đã hết hạn!',
+                data: null,
+                timestamp: new Date().toISOString()
+            } as ApiResponse);
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'OTP hợp lệ! Bạn có thể tiếp tục đăng ký.',
+            data: { verified: true, email },
+            timestamp: new Date().toISOString()
+        } as ApiResponse);
+
+    } catch (error) {
+        console.error('Error verifying OTP:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Đã xảy ra lỗi trong quá trình xác thực OTP.',
+            data: null,
+            timestamp: new Date().toISOString()
+        } as ApiResponse);
+    }
 };

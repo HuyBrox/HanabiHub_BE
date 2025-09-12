@@ -23,6 +23,10 @@ const lessonSchema = new Schema<ILesson>({
     videoUrl: {
         type: String,
     },
+    userCompleted: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+    }],
     Comments: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: Comment,
