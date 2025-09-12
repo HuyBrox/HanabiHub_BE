@@ -9,7 +9,7 @@
   "main": "dist/index.js",
   "scripts": {
     "start": "node -r tsconfig-paths/register dist/index.js",
-    "dev": "nodemon -r tsconfig-paths/register src/index.ts",
+    "dev": "nodemon",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "clean": "rimraf dist",

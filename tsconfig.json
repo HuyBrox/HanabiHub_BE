@@ -31,9 +31,10 @@
       "@middleware/*": ["middleware/*"],
       "@models/*": ["models/*"],
       "@routes/*": ["routes/*"],
-      "@utils/*": ["utils/*"],
+      "@util-/*": ["utils/*"],
       "@types-/*": ["types/*"],
-      "@validators/*": ["validators/*"]
+      "@validators/*": ["validators/*"],
+      "@helpers/*": ["helpers/*"],
     }
   },
   "ts-node": {

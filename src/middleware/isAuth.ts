@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthRequest, ApiResponse } from '../types';
+import { verifyAccessToken } from '../utils/jwt';
 
 export const isAuth = (req: AuthRequest, res: Response, next: NextFunction): void => {
   try {
@@ -15,13 +16,20 @@ export const isAuth = (req: AuthRequest, res: Response, next: NextFunction): voi
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret') as any;
-    req.user = decoded;
+    // Verify access token (chỉ accept access token, không accept refresh token)
+    const decoded = verifyAccessToken(token);
+    req.user = {
+      id: decoded.id,
+      email: decoded.email,
+      isAdmin: decoded.isAdmin || false,
+      name: decoded.email // temporary fallback
+    };
+
     next();
   } catch (error) {
     res.status(401).json({
       success: false,
-      message: 'Token không hợp lệ',
+      message: 'Access token không hợp lệ hoặc đã hết hạn',
       data: null,
       timestamp: new Date().toISOString()
     } as ApiResponse);

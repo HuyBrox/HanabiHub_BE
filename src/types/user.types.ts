@@ -4,6 +4,13 @@ import { Document, Types } from "mongoose";
 // Định nghĩa level type để tái sử dụng
 export type UserLevel = "N5" | "N4" | "N3" | "N2" | "N1";
 
+// Interface cho refresh token device
+export interface RefreshTokenDevice {
+  token: string;
+  device?: string;
+  createdAt: Date;
+}
+
 // Interface cơ bản cho User (không kế thừa Document)
 export interface IUserBase {
   fullname: string;
@@ -22,6 +29,54 @@ export interface IUserBase {
   level: UserLevel;
   isActive: boolean;
   isAdmin: boolean;
+  refreshToken?: string; // Single refresh token for simplicity
+}
+
+// Interface cho Mongoose Document (kế thừa Document)
+export interface IUser extends IUserBase, Document {
+  _id: Types.ObjectId;                 // id mặc định của Mongo
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  username: string;
+  password: string;
+  fullname: string;
+  //xác thực mật khẩu
+  confirmPassword: string;
+  Otp: string; //mã otp gửi về email
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface LogoutRequest {
+  refreshToken?: string;
+  logoutAll?: boolean; // true = logout all devices, false = logout current device only
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: {
+    id: string;
+    email: string;
+    username: string;
+    fullname: string;
+  };
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
 }
 
 // Interface cho Mongoose Document (kế thừa Document)
@@ -39,11 +94,36 @@ export interface CreateUserRequest {
   fullname: string;
   //xác thực mật khẩu
   confirmPassword: string;
+  Otp: string; //mã otp gửi về email
 }
 
 export interface LoginRequest {
   email: string;
   password: string;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface LogoutRequest {
+  refreshToken?: string;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: {
+    id: string;
+    email: string;
+    username: string;
+    fullname: string;
+  };
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
 }
 
 export interface UpdateUserRequest {

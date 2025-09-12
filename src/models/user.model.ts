@@ -73,6 +73,10 @@ const UserSchema = new Schema<IUser>({
         type: Boolean,
         default: false,
     },
+    refreshToken: {
+        type: String,
+        default: null,
+    },
 
     // Hoạt động gần đây
     // recentActivity: [

@@ -1,5 +1,5 @@
 import Otp from '@models/opt.model'; // Model OTP
-import { sendOtpEmail } from '@utils/email'; // Hàm gửi OTP qua email
+import { sendOtpEmail } from '../utils/email'; // Hàm gửi OTP qua email
 
 // Helper để lưu OTP vào database
 export async function storeOtp(email: string, otp: string) {
