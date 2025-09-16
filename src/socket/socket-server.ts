@@ -2,7 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import mongoose from "mongoose";
-import User from "@/models/user.model";  // Sử dụng path mapping @
+import User from "../models/user.model";
 
 const app = express();
 const server = http.createServer(app);

@@ -6,8 +6,8 @@ import {
   updatePost,
   deletePost,
   toggleLikePost
-} from '@controllers/post.controller';
-// import { isAuth } from '@middleware/isAuth'; // Uncomment khi có middleware
+} from '../controllers/post.controller';
+// import { isAuth } from '../middleware/isAuth'; // Uncomment khi có middleware
 
 const router = Router();
 

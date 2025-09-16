@@ -1,5 +1,5 @@
 import mongoose, { Schema, Model } from "mongoose";
-import { IFlashList } from '@/types/flash-list.types';
+import { IFlashList } from "../types/flash-list.types";
 import User from "./user.model";
 
 const flashListSchema = new Schema<IFlashList>({

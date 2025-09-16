@@ -1,5 +1,5 @@
 import mongoose, { Schema, Model } from "mongoose";
-import { ILesson, LessonType } from '@/types/lesson.types';
+import { ILesson, LessonType } from "../types/lesson.types";
 import Comment from "./comment.model";
 
 const lessonSchema = new Schema<ILesson>({

@@ -1,5 +1,5 @@
 import mongoose, { Schema, Model } from "mongoose";
-import { IComment, CommentTargetModel } from '@/types/comment.types';
+import { IComment, CommentTargetModel } from "../types/comment.types";
 
 // Định nghĩa schema cho Comment
 const commentSchema = new Schema<IComment>({

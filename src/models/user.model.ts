@@ -1,81 +1,89 @@
-import mongoose, { Schema, Model } from 'mongoose';
-import { IUser, UserLevel } from '@/types/user.types';
+import { de } from "zod/v4/locales/index.cjs";
+import mongoose, { Schema, Model } from "mongoose";
+import { IUser, UserLevel } from "../types/user.types";
 
-const UserSchema = new Schema<IUser>({
+const UserSchema = new Schema<IUser>(
+  {
+    deleted: {
+      type: Boolean,
+      default: false,
+    },
     fullname: {
-        type: String,
-        required: true,
+      type: String,
+      required: true,
     },
     username: {
-        type: String,
-        required: true,
-        unique: true,
+      type: String,
+      required: true,
+      unique: true,
     },
     email: {
-        type: String,
-        required: true,
-        unique: true,
+      type: String,
+      required: true,
+      unique: true,
+    },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other"],
+      default: "other",
     },
     password: {
-        type: String,
-        required: true,
+      type: String,
+      required: true,
     },
     avatar: {
-        type: String,
-        default: 'https://png.pngtree.com/png-vector/20190623/ourlarge/pngtree-accountavataruser--flat-color-icon--vector-icon-banner-templ-png-image_1491720.jpg',
+      type: String,
+      default:
+        "https://png.pngtree.com/png-vector/20190623/ourlarge/pngtree-accountavataruser--flat-color-icon--vector-icon-banner-templ-png-image_1491720.jpg",
     },
     bio: {
-        type: String,
-        max: 300,
-        default: '',
+      type: String,
+      max: 300,
+      default: "",
     },
     phone: {
-        type: String,
+      type: String,
     },
     address: {
-        type: String,
+      type: String,
     },
     course: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Course',
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
     },
     lastActiveAt: {
-        type: Date,
-        default: Date.now,
+      type: Date,
+      default: Date.now,
     },
     posts: {
-        type: Number,
-        default: 0,
+      type: Number,
+      default: 0,
     },
     followers: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-        }
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
     ],
     following: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-        }
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
     ],
     //trình độ học vấn
     level: {
-        type: String,
-        enum: ['N5', 'N4', 'N3', 'N2', 'N1'] as UserLevel[],
-        default: 'N5' as UserLevel,
+      type: String,
+      enum: ["N5", "N4", "N3", "N2", "N1"] as UserLevel[],
+      default: "N5" as UserLevel,
     },
     isActive: {
-        type: Boolean,
-        default: true,
+      type: Boolean,
+      default: true,
     },
     isAdmin: {
-        type: Boolean,
-        default: false,
-    },
-    refreshToken: {
-        type: String,
-        default: null,
+      type: Boolean,
+      default: false,
     },
 
     // Hoạt động gần đây
@@ -84,8 +92,9 @@ const UserSchema = new Schema<IUser>({
     //         type: String,
     //     }
     // ],
+  },
+  { timestamps: true }
+);
 
-}, { timestamps: true });
-
-const User: Model<IUser> = mongoose.model<IUser>('User', UserSchema);
+const User: Model<IUser> = mongoose.model<IUser>("User", UserSchema);
 export default User;

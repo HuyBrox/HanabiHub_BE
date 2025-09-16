@@ -24,13 +24,13 @@ export const generateAccessToken = (payload: TokenPayload): string => {
   );
 };
 
-// Tạo Refresh Token (thời gian sống dài: 7 ngày)
+// Tạo Refresh Token (thời gian sống dài: 30 ngày)
 export const generateRefreshToken = (payload: RefreshTokenPayload): string => {
   return jwt.sign(
     payload,
     process.env.JWT_REFRESH_SECRET || 'refresh-secret-key',
     {
-      expiresIn: '7d' // 7 ngày
+      expiresIn: '30d' // 30 ngày
     }
   );
 };

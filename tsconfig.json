@@ -24,22 +24,9 @@
     "noPropertyAccessFromIndexSignature": false,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "baseUrl": "./src",
-    "paths": {
-      "@/*": ["*"],
-      "@controllers/*": ["controllers/*"],
-      "@middleware/*": ["middleware/*"],
-      "@models/*": ["models/*"],
-      "@routes/*": ["routes/*"],
-      "@util-/*": ["utils/*"],
-      "@types-/*": ["types/*"],
-      "@validators/*": ["validators/*"],
-      "@helpers/*": ["helpers/*"],
-    }
+    "baseUrl": "./"
   },
-  "ts-node": {
-    "require": ["tsconfig-paths/register"]
-  },
+
   "include": [
     "src/**/*"
   ],

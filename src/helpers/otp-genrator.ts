@@ -1,9 +1,9 @@
-import Otp from '@models/opt.model'; // Model OTP
+import Otp from '../models/opt.model';
 import { sendOtpEmail } from '../utils/email'; // Hàm gửi OTP qua email
 
 // Helper để lưu OTP vào database
 export async function storeOtp(email: string, otp: string) {
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // Hết hạn sau 5 phút
+    const expiresAt = new Date(Date.now() + 3 * 60 * 1000); // Hết hạn sau 3 phút
     await Otp.create({ email, otp, expiresAt });
 }
 

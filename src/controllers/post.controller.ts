@@ -1,27 +1,20 @@
-import { Request, Response } from 'express';
-import Post from '@models/post.model';
-import {
-  ApiResponse,
-  IPost,
-  CreatePostRequest,
-  UpdatePostRequest,
-  PostPublicInfo,
-  AuthRequest
-} from '../types';
+import { Request, Response } from "express";
+import Post from "../models/post.model";
+import { ApiResponse, IPost, AuthRequest } from "../types";
 
 // [GET] /api/posts - Lấy tất cả posts
 export const getAllPosts = async (req: Request, res: Response) => {
   try {
     const posts: IPost[] = await Post.find()
-      .populate('author', 'fullname username avatar')
-      .populate('comments')
+      .populate("author", "fullname username avatar")
+      .populate("comments")
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
       message: "Posts retrieved successfully",
       data: posts,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
     console.error("Error fetching posts:", error);
@@ -29,7 +22,7 @@ export const getAllPosts = async (req: Request, res: Response) => {
       success: false,
       message: "Internal Server Error",
       data: null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   }
 };
@@ -39,15 +32,15 @@ export const getPost = async (req: Request, res: Response) => {
   try {
     const postId = req.params.id;
     const post: IPost | null = await Post.findById(postId)
-      .populate('author', 'fullname username avatar')
-      .populate('comments');
+      .populate("author", "fullname username avatar")
+      .populate("comments");
 
     if (!post) {
       return res.status(404).json({
         success: false,
         message: "Post not found",
         data: null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
 
@@ -55,7 +48,7 @@ export const getPost = async (req: Request, res: Response) => {
       success: true,
       message: "Post retrieved successfully",
       data: post,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
     console.error("Error fetching post:", error);
@@ -63,7 +56,7 @@ export const getPost = async (req: Request, res: Response) => {
       success: false,
       message: "Internal Server Error",
       data: null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   }
 };
@@ -71,7 +64,12 @@ export const getPost = async (req: Request, res: Response) => {
 // [POST] /api/posts - Tạo post mới
 export const createPost = async (req: AuthRequest, res: Response) => {
   try {
-    const createData: CreatePostRequest = req.body;
+    const createData: {
+      title: string;
+      content: string;
+      images?: string[];
+      tags?: string[];
+    } = req.body;
     const authorId = req.user?.id; // Giả sử có middleware auth
 
     if (!authorId) {
@@ -79,7 +77,7 @@ export const createPost = async (req: AuthRequest, res: Response) => {
         success: false,
         message: "Unauthorized",
         data: null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
 
@@ -87,17 +85,17 @@ export const createPost = async (req: AuthRequest, res: Response) => {
       ...createData,
       author: authorId,
       likes: [],
-      comments: []
+      comments: [],
     });
 
     const savedPost = await newPost.save();
-    await savedPost.populate('author', 'fullname username avatar');
+    await savedPost.populate("author", "fullname username avatar");
 
     return res.status(201).json({
       success: true,
       message: "Post created successfully",
       data: savedPost,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
     console.error("Error creating post:", error);
@@ -105,7 +103,7 @@ export const createPost = async (req: AuthRequest, res: Response) => {
       success: false,
       message: "Internal Server Error",
       data: null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   }
 };
@@ -114,7 +112,12 @@ export const createPost = async (req: AuthRequest, res: Response) => {
 export const updatePost = async (req: AuthRequest, res: Response) => {
   try {
     const postId = req.params.id;
-    const updateData: UpdatePostRequest = req.body;
+    const updateData: {
+      title?: string;
+      content?: string;
+      images?: string[];
+      tags?: string[];
+    } = req.body;
     const userId = req.user?.id;
 
     const post: IPost | null = await Post.findById(postId);
@@ -124,7 +127,7 @@ export const updatePost = async (req: AuthRequest, res: Response) => {
         success: false,
         message: "Post not found",
         data: null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
 
@@ -134,7 +137,7 @@ export const updatePost = async (req: AuthRequest, res: Response) => {
         success: false,
         message: "You can only update your own posts",
         data: null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
 
@@ -142,13 +145,13 @@ export const updatePost = async (req: AuthRequest, res: Response) => {
       postId,
       updateData,
       { new: true, runValidators: true }
-    ).populate('author', 'fullname username avatar');
+    ).populate("author", "fullname username avatar");
 
     return res.status(200).json({
       success: true,
       message: "Post updated successfully",
       data: updatedPost,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
     console.error("Error updating post:", error);
@@ -156,7 +159,7 @@ export const updatePost = async (req: AuthRequest, res: Response) => {
       success: false,
       message: "Internal Server Error",
       data: null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   }
 };
@@ -174,7 +177,7 @@ export const deletePost = async (req: AuthRequest, res: Response) => {
         success: false,
         message: "Post not found",
         data: null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
 
@@ -184,7 +187,7 @@ export const deletePost = async (req: AuthRequest, res: Response) => {
         success: false,
         message: "You can only delete your own posts",
         data: null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
 
@@ -194,7 +197,7 @@ export const deletePost = async (req: AuthRequest, res: Response) => {
       success: true,
       message: "Post deleted successfully",
       data: null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
     console.error("Error deleting post:", error);
@@ -202,7 +205,7 @@ export const deletePost = async (req: AuthRequest, res: Response) => {
       success: false,
       message: "Internal Server Error",
       data: null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   }
 };
@@ -218,7 +221,7 @@ export const toggleLikePost = async (req: AuthRequest, res: Response) => {
         success: false,
         message: "Unauthorized",
         data: null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
 
@@ -229,11 +232,11 @@ export const toggleLikePost = async (req: AuthRequest, res: Response) => {
         success: false,
         message: "Post not found",
         data: null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
 
-    const userIndex = post.likes.findIndex(id => id.toString() === userId);
+    const userIndex = post.likes.findIndex((id) => id.toString() === userId);
 
     if (userIndex === -1) {
       // Like post
@@ -249,7 +252,7 @@ export const toggleLikePost = async (req: AuthRequest, res: Response) => {
       success: true,
       message: userIndex === -1 ? "Post liked" : "Post unliked",
       data: { likes: post.likes.length },
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
     console.error("Error toggling like:", error);
@@ -257,7 +260,7 @@ export const toggleLikePost = async (req: AuthRequest, res: Response) => {
       success: false,
       message: "Internal Server Error",
       data: null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     } as ApiResponse);
   }
 };

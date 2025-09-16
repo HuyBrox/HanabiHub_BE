@@ -1,16 +1,16 @@
-// Import alias setup for production (must be first)
-import './alias';
+// Alias setup removed
 
-import express, { Application, Request, Response, NextFunction } from 'express';
+import express, { Application, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import session from "express-session";
 import { ExpressPeerServer } from "peer";
-import { app, server } from "@/socket/socket-server";  // Sử dụng path mapping @
-import routes from "@/routes";
-import connectDB from '@/utils/db';
+import { app, server } from "./socket/socket-server";
+import routes from "./routes";
+import connectDB from "./utils/db";
 
 dotenv.config();
 
@@ -18,15 +18,16 @@ const PORT: number = parseInt(process.env.PORT || "8080", 10);
 
 // Middleware
 app.use(helmet());
-app.use(cors());
 app.use(morgan("combined"));
+app.use(cookieParser()); // Thêm cookie parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const corsOptions = {
-  origin: "*",
+  origin: process.env.FRONTEND_URL || "http://localhost:3000", // Chỉ định cụ thể origin
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true, // Cho phép gửi cookies
 };
 app.use(cors(corsOptions));
 
@@ -76,7 +77,9 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   res.status(500).json({
     error: "Internal Server Error",
     message:
-      process.env.NODE_ENV === "development" ? err.message : "hãy kiểm tra lại!",
+      process.env.NODE_ENV === "development"
+        ? err.message
+        : "hãy kiểm tra lại!",
   });
 });
 
