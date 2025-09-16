@@ -330,7 +330,7 @@ export const refreshToken = async (req: Request, res: Response) => {
     if (!refreshToken) {
       return res.status(401).json({
         success: false,
-        message: "Refresh token is required",
+        message: "Không tìm thấy refresh token",
         data: null,
         timestamp: new Date().toISOString(),
       } as ApiResponse);

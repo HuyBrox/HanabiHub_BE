@@ -2,6 +2,8 @@ import { Response } from "express";
 import User from "../models/user.model";
 import { ApiResponse, IUser, AuthRequest } from "../types";
 import { uploadImage } from "../helpers/upload-media";
+import Bycrypt from "bcryptjs";
+import { verifyOtp } from "../helpers/otp-genrator";
 
 // [GET] /api/users/me - Lấy thông tin user hiện tại
 export const getCurrentUser = async (req: AuthRequest, res: Response) => {
@@ -69,7 +71,7 @@ export const getUser = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// [GET] /api/users?page=1&limit=10 - Lấy danh sách user (phân trang)
+// [GET] /api/user/getAll?page=1&limit=10 - Lấy danh sách user (phân trang)
 export const getUsers = async (req: AuthRequest, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -106,7 +108,7 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
     // Chỉ lấy các trường hợp hợp lệ từ body (trừ avatar)
     const updateFields: Record<string, any> = {};
     const allowedFields = [
-      "email",
+      "username",
       "fullname",
       "gender",
       "bio",
@@ -155,8 +157,73 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
     } as ApiResponse);
   }
 };
+//[PATCH] /api/users/change-password - Đổi mật khẩu
+export const changePassword = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { currentPassword, newPassword, otp } = req.body;
+    if (!currentPassword || !newPassword || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu thông tin bắt buộc",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
 
-// [DELETE] /api/users/ - Xóa user hiện tại
+    // Kiểm tra mật khẩu hiện tại
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    // Verify OTP
+    const isOtpValid = await verifyOtp(user.email, otp);
+    if (!isOtpValid) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP không hợp lệ hoặc đã hết hạn",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    // Kiểm tra mật khẩu hiện tại
+    const isMatch = await Bycrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu hiện tại không đúng",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    // Cập nhật mật khẩu mới
+    user.password = await Bycrypt.hash(newPassword, 10);
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Đổi mật khẩu thành công",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Error changing password:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+// [DELETE] /user/ - Xóa user hiện tại
 export const deleteUser = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -189,48 +256,65 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     } as ApiResponse);
   }
 };
-// //[POST] /api/users/change-avatar/:id - Sửa avatar user hiện tại
-// export const changeAvatar = async (req: AuthRequest, res: Response) => {
-//   try {
-//     const userId = req.user?.id;
-//     const { avatar } = req.files;
-//     if (!avatar) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Yêu cầu avatar mới",
-//         data: null,
-//         timestamp: new Date().toISOString(),
-//       } as ApiResponse);
-//     }
+// //[PATCH] /user/change-email - thay mail ( chỗ này gửi mail về mail cũ nhé dev fe)
+export const changeEmail = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const email = req.user?.email;
+    const { newEmail, Otp } = req.body;
+    if (!newEmail || !Otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu thông tin bắt buộc",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    const isOtpValid = await Otp.verify(email, Otp);
+    if (!isOtpValid) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP không hợp lệ hoặc đã hết hạn",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    // Kiểm tra email mới đã được sử dụng chưa
+    const emailExists = await User.findOne({ email: newEmail });
+    if (emailExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Email đã được sử dụng",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    // Cập nhật email mới
+    user.email = newEmail;
+    await user.save();
 
-//     const updatedUser = await User.findOneAndUpdate(
-//       { _id: userId, deleted: false },
-//       { avatar },
-//       { new: true, runValidators: true }
-//     ).select("-password");
-
-//     if (!updatedUser) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "User not found",
-//         data: null,
-//         timestamp: new Date().toISOString(),
-//       } as ApiResponse);
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Avatar updated successfully",
-//       data: updatedUser,
-//       timestamp: new Date().toISOString(),
-//     } as ApiResponse);
-//   } catch (error) {
-//     console.error("Error changing avatar:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       data: null,
-//       timestamp: new Date().toISOString(),
-//     } as ApiResponse);
-//   }
-// };
+    return res.status(200).json({
+      success: true,
+      message: "Cập nhật email thành công",
+      data: user,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Error changing email:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
