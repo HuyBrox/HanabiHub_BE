@@ -85,6 +85,10 @@ const UserSchema = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
 
     // Hoạt động gần đây
     // recentActivity: [

@@ -5,7 +5,7 @@ import { uploadImage } from "../helpers/upload-media";
 import Bycrypt from "bcryptjs";
 import { verifyOtp } from "../helpers/otp-genrator";
 
-// [GET] /api/users/me - Lấy thông tin user hiện tại
+// [GET] /api/user/profile - Lấy thông tin user hiện tại
 export const getCurrentUser = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -45,7 +45,7 @@ export const getUser = async (req: AuthRequest, res: Response) => {
     const user: IUser | null = await User.findOne({
       _id: userId,
       deleted: false,
-    }).select("-password");
+    }).select("-password -email -phone");
     if (!user) {
       return res.status(404).json({
         success: false,

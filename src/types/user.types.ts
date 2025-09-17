@@ -33,6 +33,7 @@ export interface IUser extends Document {
   level: UserLevel;
   isActive: boolean;
   isAdmin: boolean;
+  isOnline: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
