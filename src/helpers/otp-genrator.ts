@@ -24,10 +24,12 @@ export async function sendOtp(email: string) {
 // Helper kiểm tra OTP
 export async function verifyOtp(email: string, otp: string) {
   const otpRecord = await Otp.findOne({ email }).sort({ createdAt: -1 }); // Lấy OTP mới nhất
+  console.log("otpRecord:", otpRecord);
+  console.log("Provided OTP:", otp);
   if (
     !otpRecord ||
     otpRecord.expiresAt.getTime() < Date.now() ||
-    otpRecord.otp !== otp
+    otpRecord.otp.toString().trim() !== otp.toString().trim()
   ) {
     return false; // OTP không chính xác hoặc đã hết hạn
   }

@@ -16,17 +16,17 @@ export const register = async (req: Request, res: Response) => {
       username,
       password,
       fullname,
-      Otp,
+      otp,
     }: {
       email: string;
       username: string;
       password: string;
       fullname: string;
-      Otp: string;
+      otp: string;
     } = req.body;
 
     // Kiểm tra OTP
-    const isValidOtp = await verifyOtp(email, Otp);
+    const isValidOtp = await verifyOtp(email, otp);
     if (!isValidOtp) {
       return res.status(400).json({
         success: false,

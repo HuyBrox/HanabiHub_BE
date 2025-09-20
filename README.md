@@ -2,6 +2,8 @@
 https://hana-api.onrender.com/testServer
 A TypeScript Node.js Express backend for the Hanabi game application.
 
+Xin chào! 👋
+
 ## Installation
 
 ```bash

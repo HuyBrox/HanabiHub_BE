@@ -4,18 +4,27 @@ import { Server } from "socket.io";
 import mongoose from "mongoose";
 import User from "../models/user.model";
 
+// Simple logger utility
+const logger = {
+  success: (...args: any[]) => console.log("✅", ...args),
+  info: (...args: any[]) => console.log("ℹ️", ...args),
+  warning: (...args: any[]) => console.log("⚠️", ...args),
+  error: (...args: any[]) => console.error("❌", ...args),
+};
+
 const app = express();
 const server = http.createServer(app);
 
 // Cấu hình Socket.IO server với CORS và timeout settings
 const io = new Server(server, {
   cors: {
-    origin: `${process.env.CLIENT_URL}`,
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
     methods: ["GET", "POST"],
     credentials: true,
   },
   pingInterval: 25000, // Thời gian gửi ping để kiểm tra kết nối (25 giây)
   pingTimeout: 60000, // Thời gian chờ pong trả về trước khi disconnect (60 giây)
+  upgradeTimeout: 25000, // Thời gian chờ upgrade từ polling lên websocket (25 giây)
   maxHttpBufferSize: 1e6, // Giới hạn kích thước buffer (1MB)
   transports: ["polling", "websocket"], // Cho phép cả polling và websocket
 });
@@ -48,22 +57,6 @@ const connectionStats = {
   currentConnections: 0,
   messagesSent: 0,
   callsInitiated: 0,
-};
-
-// Logger utility với timestamp và màu sắc
-const logger = {
-  info: (message: string, ...args: any[]) => {
-    console.log(`🔵 [${new Date().toISOString()}] ${message}`, ...args);
-  },
-  success: (message: string, ...args: any[]) => {
-    console.log(`🟢 [${new Date().toISOString()}] ${message}`, ...args);
-  },
-  warning: (message: string, ...args: any[]) => {
-    console.log(`🟡 [${new Date().toISOString()}] ${message}`, ...args);
-  },
-  error: (message: string, ...args: any[]) => {
-    console.log(`🔴 [${new Date().toISOString()}] ${message}`, ...args);
-  },
 };
 
 // Cập nhật thời gian hoạt động cuối cùng của user trong database
@@ -664,7 +657,9 @@ const getConnectionStats = () => {
 };
 // Xử lý kết nối Socket.IO chính
 io.on("connection", (socket) => {
+  console.log("🔌 New socket connection:", socket.id);
   const userId = socket.handshake.query.userId as string;
+  console.log("👤 UserId from query:", userId);
 
   // Kiểm tra userId hợp lệ
   if (!userId || typeof userId !== "string" || userId.trim().length === 0) {
@@ -682,6 +677,8 @@ io.on("connection", (socket) => {
   // === CHAT EVENTS ===
   socket.on("sendMessage", (data) => {
     handleChatMessage(socket, { ...data, senderId: userId });
+    console.log("📨 sendMessage event data:", data);
+    // Log dữ liệu gửi tin nhắn để debug
   });
 
   socket.on("joinRoom", (data) => {
@@ -816,5 +813,13 @@ io.on("connection", (socket) => {
   // Log kết nối thành công với thông tin chi tiết
   logger.success(`🎯 Socket handlers đã được đăng ký cho user: ${userId}`);
 });
+
+// Log khi socket server được khởi tạo
+console.log("🚀 Socket.IO server initialized");
+console.log(
+  "📡 CORS origin:",
+  process.env.FRONTEND_URL || "http://localhost:3000"
+);
+console.log("=============> Socket.IO kết nối thành công...🚀");
 
 export { io, server, app };
