@@ -41,16 +41,37 @@ app.use(
 
 // Tích hợp PeerServer vào HTTP server
 const peerServer = ExpressPeerServer(server, {
-  path: "/peerjs",
+  path: "/",
   allow_discovery: true,
+  proxied: true,
 });
+
+// PeerJS WebSocket endpoint
 app.use("/peerjs", peerServer);
 
-peerServer.on("connection", (peer: any) => {
-  console.log("Peer connected:", peer.id);
+// Route info cho PeerJS (GET request)
+app.get("/peerjs-info", (req: Request, res: Response) => {
+  res.status(200).json({
+    status: "OK",
+    message: "PeerJS server is running",
+    timestamp: new Date().toISOString(),
+    connection: {
+      host: req.get("host"),
+      path: "/peerjs",
+      secure: req.secure,
+      example: `const peer = new Peer(id, { host: '${req.get(
+        "host"
+      )}', path: '/peerjs' })`,
+    },
+  });
 });
+
+peerServer.on("connection", (peer: any) => {
+  console.log("✅ Peer connected:", peer.id);
+});
+
 peerServer.on("disconnect", (peer: any) => {
-  console.log("Peer disconnected:", peer.id);
+  console.log("❌ Peer disconnected:", peer.id);
 });
 
 // Routes

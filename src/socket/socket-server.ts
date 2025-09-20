@@ -4,6 +4,31 @@ import { Server } from "socket.io";
 import mongoose from "mongoose";
 import User from "../models/user.model";
 
+/**
+ * CALL MANAGEMENT FEATURES ADDED:
+ *
+ * ✅ Ngăn chặn multiple calls cùng lúc:
+ *    - Kiểm tra người gọi đang trong cuộc gọi khác → CALLER_IN_CALL
+ *    - Kiểm tra người nhận đang bận → RECEIVER_BUSY
+ *
+ * ✅ Quản lý trạng thái cuộc gọi:
+ *    - activeCall: Record theo dõi cuộc gọi hiện tại của từng user
+ *    - startCall(): Đánh dấu bắt đầu cuộc gọi
+ *    - endCall(): Kết thúc cuộc gọi
+ *    - isUserInCall(): Kiểm tra user có đang trong cuộc gọi
+ *
+ * ✅ Auto cleanup khi:
+ *    - User từ chối cuộc gọi (answerCall với accepted: false)
+ *    - User kết thúc cuộc gọi (endCall event)
+ *    - User disconnect → Tự động ngắt cuộc gọi và thông báo
+ *
+ * ✅ Event mới:
+ *    - checkCallStatus: Kiểm tra trạng thái cuộc gọi
+ *    - callStatusResponse: Trả về thông tin trạng thái
+ *
+ * Error codes mới: CALLER_IN_CALL, RECEIVER_BUSY, CHECK_STATUS_ERROR
+ */
+
 // Simple logger utility
 const logger = {
   success: (...args: any[]) => console.log("✅", ...args),
@@ -50,6 +75,18 @@ const roomParticipants: Record<string, Set<string>> = {};
 // Danh sách theo dõi trạng thái typing
 // Key: "senderId_receiverId", Value: timeout ID để clear typing
 const typingTimeouts: Record<string, NodeJS.Timeout> = {};
+
+// Quản lý trạng thái cuộc gọi
+// Key: userId, Value: { callerId, receiverId, callType, startTime }
+const activeCall: Record<
+  string,
+  {
+    callerId: string;
+    receiverId: string;
+    callType: string;
+    startTime: Date;
+  } | null
+> = {};
 
 // Statistics để monitor
 const connectionStats = {
@@ -100,6 +137,39 @@ const getOnlineUsers = (): string[] => {
 // Kiểm tra user có online không
 const isUserOnline = (userId: string): boolean => {
   return userSocketMap[userId] && userSocketMap[userId].size > 0;
+};
+
+// =============== CALL MANAGEMENT FUNCTIONS ===============
+
+// Kiểm tra user có đang trong cuộc gọi không
+const isUserInCall = (userId: string): boolean => {
+  return activeCall[userId] !== null && activeCall[userId] !== undefined;
+};
+
+// Đánh dấu user bắt đầu cuộc gọi
+const startCall = (
+  callerId: string,
+  receiverId: string,
+  callType: string
+): void => {
+  const callData = { callerId, receiverId, callType, startTime: new Date() };
+  activeCall[callerId] = callData;
+  activeCall[receiverId] = callData;
+  logger.info(`📞 Bắt đầu cuộc gọi ${callType}: ${callerId} → ${receiverId}`);
+};
+
+// Kết thúc cuộc gọi
+const endCall = (userId1: string, userId2: string): void => {
+  if (activeCall[userId1]) {
+    logger.info(`📞 Kết thúc cuộc gọi: ${userId1} ↔ ${userId2}`);
+  }
+  activeCall[userId1] = null;
+  activeCall[userId2] = null;
+};
+
+// Lấy thông tin cuộc gọi hiện tại của user
+const getUserCallInfo = (userId: string) => {
+  return activeCall[userId];
 };
 
 // Validate dữ liệu tin nhắn
@@ -175,6 +245,33 @@ const handleUserDisconnection = async (
   userId: string
 ): Promise<void> => {
   try {
+    // ✅ KẾT THÚC CUỘC GỌI KHI DISCONNECT
+    if (isUserInCall(userId)) {
+      const callInfo = getUserCallInfo(userId);
+      if (callInfo) {
+        // Tìm user còn lại trong cuộc gọi
+        const otherUserId =
+          callInfo.callerId === userId
+            ? callInfo.receiverId
+            : callInfo.callerId;
+
+        if (otherUserId) {
+          endCall(userId, otherUserId);
+
+          // Thông báo cuộc gọi bị ngắt do disconnect
+          const otherUserSockets = getReceiverSocketIds(otherUserId);
+          otherUserSockets.forEach((socketId: string) => {
+            io.to(socketId).emit("callEnded", {
+              callerId: userId,
+              reason: "disconnect",
+            });
+          });
+
+          logger.warning(`📞 Cuộc gọi bị ngắt do ${userId} disconnect`);
+        }
+      }
+    }
+
     // Xóa socket ID khỏi danh sách của user
     if (userSocketMap[userId]) {
       userSocketMap[userId].delete(socket.id);
@@ -305,35 +402,59 @@ const handleSendPeerId = (
 
     // Kiểm tra người nhận có online không
     const receiverSockets = getReceiverSocketIds(receiverId);
-
-    if (receiverSockets.length > 0) {
-      const callData = {
-        callerId,
-        peerId,
-        callType,
-        timestamp: new Date(),
-      };
-
-      // Gửi thông tin cuộc gọi tới tất cả socket của người nhận
-      receiverSockets.forEach((socketId: string) => {
-        io.to(socketId).emit("receivePeerId", callData);
-        io.to(socketId).emit("incomingCall", callData);
-      });
-
-      // Cập nhật thống kê
-      connectionStats.callsInitiated++;
-
-      logger.success(
-        `📞 Cuộc gọi ${callType} từ ${callerId} đến ${receiverId} (peerId: ${peerId})`
-      );
-    } else {
-      // Người nhận không online
+    if (receiverSockets.length === 0) {
       socket.emit("callError", {
         message: "Người nhận không trực tuyến",
         code: "USER_OFFLINE",
       });
       logger.warning(`📞 Cuộc gọi thất bại: ${receiverId} không online`);
+      return;
     }
+
+    // ✅ KIỂM TRA NGƯỜI GỌI ĐANG TRONG CUỘC GỌI KHÁC
+    if (isUserInCall(callerId)) {
+      socket.emit("callError", {
+        message: "Bạn đang trong cuộc gọi khác",
+        code: "CALLER_IN_CALL",
+      });
+      logger.warning(
+        `📞 Cuộc gọi thất bại: ${callerId} đang trong cuộc gọi khác`
+      );
+      return;
+    }
+
+    // ✅ KIỂM TRA NGƯỜI NHẬN ĐANG TRONG CUỘC GỌI KHÁC
+    if (isUserInCall(receiverId)) {
+      socket.emit("callError", {
+        message: "Người nhận đang bận",
+        code: "RECEIVER_BUSY",
+      });
+      logger.warning(`📞 Cuộc gọi thất bại: ${receiverId} đang bận`);
+      return;
+    }
+
+    // ✅ ĐÁNH DẤU BẮT ĐẦU CUỘC GỌI
+    startCall(callerId, receiverId, callType);
+
+    const callData = {
+      callerId,
+      peerId,
+      callType,
+      timestamp: new Date(),
+    };
+
+    // Gửi thông tin cuộc gọi tới tất cả socket của người nhận
+    receiverSockets.forEach((socketId: string) => {
+      io.to(socketId).emit("receivePeerId", callData);
+      io.to(socketId).emit("incomingCall", callData);
+    });
+
+    // Cập nhật thống kê
+    connectionStats.callsInitiated++;
+
+    logger.success(
+      `📞 Cuộc gọi ${callType} từ ${callerId} đến ${receiverId} (peerId: ${peerId})`
+    );
   } catch (error) {
     logger.error("Lỗi xử lý cuộc gọi:", error);
     socket.emit("callError", {
@@ -684,7 +805,7 @@ io.on("connection", (socket) => {
   socket.on("joinRoom", (data) => {
     handleJoinRoom(socket, { ...data, userId });
   });
-
+  //Rời phòng
   socket.on("leaveRoom", (data) => {
     handleLeaveRoom(socket, { ...data, userId });
   });
@@ -729,11 +850,13 @@ io.on("connection", (socket) => {
         io.to(socketId).emit("callAnswered", { receiverId: userId, accepted });
       });
 
-      logger.info(
-        `📞 Cuộc gọi ${
-          accepted ? "được chấp nhận" : "bị từ chối"
-        } bởi ${userId}`
-      );
+      // ✅ NẾU TỪ CHỐI THÌ KẾT THÚC CUỘC GỌI
+      if (!accepted) {
+        endCall(callerId, userId);
+        logger.info(`📞 Cuộc gọi bị từ chối bởi ${userId}`);
+      } else {
+        logger.info(`📞 Cuộc gọi được chấp nhận bởi ${userId}`);
+      }
     } catch (error) {
       logger.error("Lỗi xử lý answer call:", error);
     }
@@ -744,6 +867,9 @@ io.on("connection", (socket) => {
       const { receiverId } = data;
       if (!receiverId) return;
 
+      // ✅ KẾT THÚC CUỘC GỌI
+      endCall(userId, receiverId);
+
       const receiverSockets = getReceiverSocketIds(receiverId);
       receiverSockets.forEach((socketId: string) => {
         io.to(socketId).emit("callEnded", { callerId: userId });
@@ -752,6 +878,29 @@ io.on("connection", (socket) => {
       logger.info(`📞 Cuộc gọi kết thúc giữa ${userId} và ${receiverId}`);
     } catch (error) {
       logger.error("Lỗi xử lý end call:", error);
+    }
+  });
+
+  // ✅ KIỂM TRA TRẠNG THÁI CUỘC GỌI
+  socket.on("checkCallStatus", (data) => {
+    try {
+      const { targetUserId } = data;
+      const isTargetInCall = targetUserId ? isUserInCall(targetUserId) : false;
+      const isCurrentUserInCall = isUserInCall(userId);
+
+      socket.emit("callStatusResponse", {
+        targetUserId,
+        targetUserInCall: isTargetInCall,
+        currentUserInCall: isCurrentUserInCall,
+        targetUserOnline: targetUserId ? isUserOnline(targetUserId) : false,
+        callInfo: isCurrentUserInCall ? getUserCallInfo(userId) : null,
+      });
+    } catch (error) {
+      logger.error("Lỗi kiểm tra trạng thái cuộc gọi:", error);
+      socket.emit("callError", {
+        message: "Lỗi kiểm tra trạng thái cuộc gọi",
+        code: "CHECK_STATUS_ERROR",
+      });
     }
   });
 
