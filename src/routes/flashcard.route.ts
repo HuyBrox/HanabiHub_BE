@@ -31,55 +31,67 @@ import { isAuth } from "../middleware/isAuth";
 const router = express.Router();
 
 //====================FlashList Routes======================
-// GET /api/v1/flashcards/lists - Lấy danh sách FlashList
-router.get("/lists", isAuth, getAllFlashLists);
+// Lấy danh sách tất cả FlashList (public + của mình)
+router.get("/get-all-flashlists", isAuth, getAllFlashLists);
 
-// GET /api/v1/flashcards/lists/:id - Lấy FlashList theo ID
-router.get("/lists/:id", isAuth, getFlashListById);
+// Lấy chi tiết FlashList theo ID
+router.get("/get-flashlist-detail/:id", isAuth, getFlashListById);
 
-// POST /api/v1/flashcards/lists - Tạo FlashList mới
-router.post("/lists", isAuth, createFlashList);
+// Tạo FlashList mới
+router.post("/create-flashlist", isAuth, createFlashList);
 
-// PUT /api/v1/flashcards/lists/:id - Cập nhật FlashList
-router.put("/lists/:id", isAuth, updateFlashList);
+// Cập nhật FlashList
+router.put("/update-flashlist/:id", isAuth, updateFlashList);
 
-// DELETE /api/v1/flashcards/lists/:id - Xóa FlashList
-router.delete("/lists/:id", isAuth, deleteFlashList);
+// Xóa FlashList
+router.delete("/delete-flashlist/:id", isAuth, deleteFlashList);
 
-// GET /api/v1/flashcards/lists/:id/study - Học tập từ FlashList
-router.get("/lists/:id/study", isAuth, getStudyDataFromList);
+// Lấy dữ liệu học tập từ FlashList
+router.get("/study-flashlist/:id", isAuth, getStudyDataFromList);
 
 //====================FlashCard Routes======================
-// GET /api/v1/flashcards - Lấy tất cả FlashCard của user
-router.get("/", isAuth, getAllFlashCards);
+// Lấy tất cả FlashCard của user
+router.get("/get-all-flashcards", isAuth, getAllFlashCards);
 
-// GET /api/v1/flashcards/:id - Lấy FlashCard theo ID
-router.get("/:id", isAuth, getFlashCardById);
+// Lấy chi tiết FlashCard theo ID
+router.get("/get-flashcard-detail/:id", isAuth, getFlashCardById);
 
-// POST /api/v1/flashcards - Tạo FlashCard mới
-router.post("/", isAuth, createFlashCard);
+// Tạo FlashCard mới
+router.post("/create-flashcard", isAuth, createFlashCard);
 
-// PUT /api/v1/flashcards/:id - Cập nhật FlashCard
-router.put("/:id", isAuth, updateFlashCard);
+// Cập nhật FlashCard
+router.put("/update-flashcard/:id", isAuth, updateFlashCard);
 
-// DELETE /api/v1/flashcards/:id - Xóa FlashCard
-router.delete("/:id", isAuth, deleteFlashCard);
+// Xóa FlashCard
+router.delete("/delete-flashcard/:id", isAuth, deleteFlashCard);
 
-// GET /api/v1/flashcards/:id/study - Lấy dữ liệu học tập từ FlashCard
-router.get("/:id/study", isAuth, getStudyData);
+// Lấy dữ liệu học tập từ FlashCard
+router.get("/study-flashcard/:id", isAuth, getStudyData);
 
 //====================Card Item Routes======================
-// POST /api/v1/flashcards/:id/cards - Thêm thẻ vào FlashCard
-router.post("/:id/cards", isAuth, addCardToFlashCard);
+// Thêm thẻ vào FlashCard
+router.post("/add-card-to-flashcard/:id", isAuth, addCardToFlashCard);
 
-// DELETE /api/v1/flashcards/:id/cards - Xóa thẻ khỏi FlashCard
-router.delete("/:id/cards", isAuth, deleteCardFromFlashCard);
+// Xóa thẻ khỏi FlashCard
+router.delete(
+  "/delete-card-from-flashcard/:id",
+  isAuth,
+  deleteCardFromFlashCard
+);
 
 //====================FlashList & FlashCard Relationship Routes======================
-// POST /api/v1/flashcards/lists/:listId/flashcards/:cardId - Thêm FlashCard vào FlashList
-router.post("/lists/:listId/flashcards/:cardId", isAuth, addFlashCardToList);
+// Thêm FlashCard vào FlashList
+router.post(
+  "/add-flashcard-to-flashlist/:listId/:cardId",
+  isAuth,
+  addFlashCardToList
+);
 
-// DELETE /api/v1/flashcards/lists/:listId/flashcards/:cardId - Xóa FlashCard khỏi FlashList
-router.delete("/lists/:listId/flashcards/:cardId", isAuth, removeFlashCardFromList);
+// Xóa FlashCard khỏi FlashList
+router.delete(
+  "/remove-flashcard-from-flashlist/:listId/:cardId",
+  isAuth,
+  removeFlashCardFromList
+);
 
 export default router;

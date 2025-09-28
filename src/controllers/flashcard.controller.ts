@@ -14,19 +14,19 @@ export const getAllFlashLists = async (req: AuthRequest, res: Response) => {
 
     // Lấy FlashList public của người khác và FlashList của user hiện tại
     const [publicLists, myLists, totalPublic, totalMy] = await Promise.all([
-      FlashList.find({ user: { $ne: userId }, public: true })
-        .populate('user', 'fullname username avatar')
-        .populate('flashcards', 'name')
+      FlashList.find({ user: { $ne: userId }, isPublic: true })
+        .populate("user", "fullname username avatar")
+        .populate("flashcards", "name")
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
       FlashList.find({ user: userId })
-        .populate('flashcards', 'name')
+        .populate("flashcards", "name")
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
-      FlashList.countDocuments({ user: { $ne: userId }, public: true }),
-      FlashList.countDocuments({ user: userId })
+      FlashList.countDocuments({ user: { $ne: userId }, isPublic: true }),
+      FlashList.countDocuments({ user: userId }),
     ]);
 
     return res.status(200).json({
@@ -41,8 +41,8 @@ export const getAllFlashLists = async (req: AuthRequest, res: Response) => {
           totalPublic,
           totalMy,
           totalPublicPages: Math.ceil(totalPublic / limit),
-          totalMyPages: Math.ceil(totalMy / limit)
-        }
+          totalMyPages: Math.ceil(totalMy / limit),
+        },
       },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
@@ -63,8 +63,8 @@ export const getFlashListById = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
 
     const flashList = await FlashList.findById(listId)
-      .populate('user', 'fullname username avatar')
-      .populate('flashcards');
+      .populate("user", "fullname username avatar")
+      .populate("flashcards");
 
     if (!flashList) {
       return res.status(404).json({
@@ -75,7 +75,7 @@ export const getFlashListById = async (req: AuthRequest, res: Response) => {
     }
 
     // Kiểm tra quyền truy cập (public hoặc owner)
-    if (!flashList.public && flashList.user._id.toString() !== userId) {
+    if (!flashList.isPublic && flashList.user._id.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: "Không có quyền truy cập FlashList này",
@@ -103,7 +103,7 @@ export const getFlashListById = async (req: AuthRequest, res: Response) => {
 export const createFlashList = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { title, public: isPublic } = req.body;
+    const { title, isPublic } = req.body;
 
     if (!title) {
       return res.status(400).json({
@@ -116,8 +116,8 @@ export const createFlashList = async (req: AuthRequest, res: Response) => {
     const flashList = await FlashList.create({
       title,
       user: userId,
-      public: isPublic ?? true,
-      flashcards: []
+      isPublic,
+      flashcards: [],
     });
 
     return res.status(201).json({
@@ -141,7 +141,7 @@ export const updateFlashList = async (req: AuthRequest, res: Response) => {
   try {
     const listId = req.params.id;
     const userId = req.user?.id;
-    const { title, public: isPublic } = req.body;
+    const { title, isPublic } = req.body;
 
     const flashList = await FlashList.findOne({ _id: listId, user: userId });
     if (!flashList) {
@@ -153,7 +153,7 @@ export const updateFlashList = async (req: AuthRequest, res: Response) => {
     }
 
     if (title) flashList.title = title;
-    if (typeof isPublic === 'boolean') flashList.public = isPublic;
+    if (typeof isPublic === "boolean") flashList.isPublic = isPublic;
 
     await flashList.save();
 
@@ -219,7 +219,7 @@ export const getAllFlashCards = async (req: AuthRequest, res: Response) => {
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
-      FlashCard.countDocuments({ user: userId })
+      FlashCard.countDocuments({ user: userId }),
     ]);
 
     return res.status(200).json({
@@ -231,8 +231,8 @@ export const getAllFlashCards = async (req: AuthRequest, res: Response) => {
           currentPage: page,
           limit,
           total,
-          totalPages: Math.ceil(total / limit)
-        }
+          totalPages: Math.ceil(total / limit),
+        },
       },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
@@ -294,11 +294,17 @@ export const createFlashCard = async (req: AuthRequest, res: Response) => {
     let finalCards = cards || [];
 
     // Xử lý cardsText như code cũ (nếu có)
-    if (cardsText && typeof cardsText === 'string') {
-      const parsedCards = cardsText.trim().split('\n').map(line => {
-        const [vocabulary, meaning] = line.split('-').map(item => item.trim());
-        return { vocabulary, meaning };
-      }).filter(card => card.vocabulary && card.meaning);
+    if (cardsText && typeof cardsText === "string") {
+      const parsedCards = cardsText
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const [vocabulary, meaning] = line
+            .split("-")
+            .map((item) => item.trim());
+          return { vocabulary, meaning };
+        })
+        .filter((card) => card.vocabulary && card.meaning);
 
       finalCards = [...finalCards, ...parsedCards];
     }
@@ -445,7 +451,10 @@ export const addCardToFlashCard = async (req: AuthRequest, res: Response) => {
 };
 
 // [DELETE] /api/flashcards/:id/cards - Xóa thẻ khỏi FlashCard
-export const deleteCardFromFlashCard = async (req: AuthRequest, res: Response) => {
+export const deleteCardFromFlashCard = async (
+  req: AuthRequest,
+  res: Response
+) => {
   try {
     const userId = req.user?.id;
     const flashCardId = req.params.id;
@@ -513,7 +522,7 @@ export const addFlashCardToList = async (req: AuthRequest, res: Response) => {
 
     const [flashList, flashCard] = await Promise.all([
       FlashList.findOne({ _id: listId, user: userId }),
-      FlashCard.findOne({ _id: cardId, user: userId })
+      FlashCard.findOne({ _id: cardId, user: userId }),
     ]);
 
     if (!flashList) {
@@ -561,7 +570,10 @@ export const addFlashCardToList = async (req: AuthRequest, res: Response) => {
 };
 
 // [DELETE] /api/flashcards/lists/:listId/flashcards/:cardId - Xóa FlashCard khỏi FlashList
-export const removeFlashCardFromList = async (req: AuthRequest, res: Response) => {
+export const removeFlashCardFromList = async (
+  req: AuthRequest,
+  res: Response
+) => {
   try {
     const userId = req.user?.id;
     const { listId, cardId } = req.params;
@@ -576,7 +588,7 @@ export const removeFlashCardFromList = async (req: AuthRequest, res: Response) =
     }
 
     flashList.flashcards = flashList.flashcards.filter(
-      id => id.toString() !== cardId
+      (id) => id.toString() !== cardId
     );
     await flashList.save();
 
@@ -630,17 +642,17 @@ export const getStudyData = async (req: AuthRequest, res: Response) => {
     const half = Math.floor(cardsData.length / 2);
 
     // Nhóm 1: vocabulary -> meaning
-    const group1 = cardsData.slice(0, half).map(card => ({
+    const group1 = cardsData.slice(0, half).map((card) => ({
       question: card.vocabulary,
       answer: card.meaning,
-      mode: 'vocab-to-meaning'
+      mode: "vocab-to-meaning",
     }));
 
     // Nhóm 2: meaning -> vocabulary
-    const group2 = cardsData.slice(half, half * 2).map(card => ({
+    const group2 = cardsData.slice(half, half * 2).map((card) => ({
       question: card.meaning,
       answer: card.vocabulary,
-      mode: 'meaning-to-vocab'
+      mode: "meaning-to-vocab",
     }));
 
     const quiz = [...group1, ...group2];
@@ -651,10 +663,10 @@ export const getStudyData = async (req: AuthRequest, res: Response) => {
       data: {
         flashCard: {
           _id: flashCard._id,
-          name: flashCard.name
+          name: flashCard.name,
         },
         quiz,
-        totalCards: cardsData.length
+        totalCards: cardsData.length,
       },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
@@ -674,8 +686,7 @@ export const getStudyDataFromList = async (req: AuthRequest, res: Response) => {
     const listId = req.params.id;
     const userId = req.user?.id;
 
-    const flashList = await FlashList.findById(listId)
-      .populate('flashcards');
+    const flashList = await FlashList.findById(listId).populate("flashcards");
 
     if (!flashList) {
       return res.status(404).json({
@@ -686,7 +697,7 @@ export const getStudyDataFromList = async (req: AuthRequest, res: Response) => {
     }
 
     // Kiểm tra quyền truy cập
-    if (!flashList.public && flashList.user.toString() !== userId) {
+    if (!flashList.isPublic && flashList.user.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: "Không có quyền truy cập FlashList này",
@@ -716,16 +727,16 @@ export const getStudyDataFromList = async (req: AuthRequest, res: Response) => {
 
     const half = Math.floor(allCards.length / 2);
 
-    const group1 = allCards.slice(0, half).map(card => ({
+    const group1 = allCards.slice(0, half).map((card) => ({
       question: card.vocabulary,
       answer: card.meaning,
-      mode: 'vocab-to-meaning'
+      mode: "vocab-to-meaning",
     }));
 
-    const group2 = allCards.slice(half, half * 2).map(card => ({
+    const group2 = allCards.slice(half, half * 2).map((card) => ({
       question: card.meaning,
       answer: card.vocabulary,
-      mode: 'meaning-to-vocab'
+      mode: "meaning-to-vocab",
     }));
 
     const quiz = [...group1, ...group2];
@@ -736,10 +747,10 @@ export const getStudyDataFromList = async (req: AuthRequest, res: Response) => {
       data: {
         flashList: {
           _id: flashList._id,
-          title: flashList.title
+          title: flashList.title,
         },
         quiz,
-        totalCards: allCards.length
+        totalCards: allCards.length,
       },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
