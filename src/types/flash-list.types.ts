@@ -5,7 +5,7 @@ import { Document, Types } from "mongoose";
 export interface IFlashList extends Document {
   _id: Types.ObjectId;
   user: Types.ObjectId;
-  public: boolean;
+  isPublic: boolean;
   title: string;
   flashcards: Types.ObjectId[];
   createdAt?: Date;
