@@ -136,12 +136,14 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-
+// Tạo transporter dùng SendGrid SMTP
 const transporter = nodemailer.createTransport({
-  service: "SendGrid",
+  host: "smtp.sendgrid.net",
+  port: 587,
+  secure: false, // dùng STARTTLS
   auth: {
     user: "apikey", // cố định
-    pass: process.env.SENDGRID_API_KEY,
+    pass: process.env.SENDGRID_API_KEY as string,
   },
 });
 
@@ -151,7 +153,7 @@ export async function sendOtpEmail(
   otp: string | number
 ): Promise<void> {
   const mailOptions = {
-    from: `"HanabiHub" <Huybrox.dev@gmail.com>`, // chính là email bạn đã verify trong SendGrid
+    from: `"HanabiHub" <Huybrox.dev@gmail.com>`, // email đã verify trong SendGrid
     to: email,
     subject: "Mã OTP xác thực của bạn đây!",
     html: `
