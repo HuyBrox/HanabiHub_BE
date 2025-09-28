@@ -131,30 +131,22 @@
 // }
 
 //==============================dùng send grid vì google phiền vl========================
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import sgMail from "@sendgrid/mail";
 
 dotenv.config();
 
-// Tạo transporter dùng SendGrid SMTP
-const transporter = nodemailer.createTransport({
-  host: "smtp.sendgrid.net",
-  port: 587,
-  secure: false, // dùng STARTTLS
-  auth: {
-    user: "apikey", // cố định
-    pass: process.env.SENDGRID_API_KEY as string,
-  },
-});
+// Cấu hình SendGrid API Key
+sgMail.setApiKey(process.env.SENDGRID_API_KEY as string);
 
 // Hàm gửi OTP qua email
 export async function sendOtpEmail(
   email: string,
   otp: string | number
 ): Promise<void> {
-  const mailOptions = {
-    from: `"HanabiHub" <Huybrox.dev@gmail.com>`, // email đã verify trong SendGrid
+  const msg = {
     to: email,
+    from: `"HanabiHub" <Huybrox.dev@gmail.com>`, // email bạn đã verify trong SendGrid
     subject: "Mã OTP xác thực của bạn đây!",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
@@ -178,7 +170,7 @@ export async function sendOtpEmail(
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sgMail.send(msg);
     console.log("✅ OTP sent to email:", email);
   } catch (error) {
     console.error("❌ Error sending OTP email:", error);
