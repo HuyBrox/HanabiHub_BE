@@ -15,4 +15,8 @@ export interface IFlashCard extends Document {
   user: Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
+  isPublic: boolean;
+  thumbnail: string;
+  description: string;
+  level: "N5" | "N4" | "N3" | "N2" | "N1";
 }

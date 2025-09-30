@@ -2,9 +2,10 @@ import FlashCard from "../models/flash-card.model";
 import FlashList from "../models/flash-list.model";
 import { ApiResponse, AuthRequest } from "../types";
 import { Response } from "express";
+import { uploadImage } from "../helpers/upload-media";
 
 //====================FlashList Management======================
-// [GET] /api/flashcards/lists - Lấy danh sách FlashList
+// [GET] /api/flashcards/lists/page=1&limit=10 - Lấy danh sách FlashList
 export const getAllFlashLists = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -103,7 +104,19 @@ export const getFlashListById = async (req: AuthRequest, res: Response) => {
 export const createFlashList = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { title, isPublic } = req.body;
+    const { title, isPublic, level, description } = req.body as {
+      title: string;
+      isPublic?: boolean;
+      level?: string;
+      description?: string;
+    };
+    let thumbnail: any = req.file as undefined;
+    if (thumbnail) {
+      const uploadedImage = await uploadImage(thumbnail);
+      if (uploadedImage) {
+        thumbnail = uploadedImage;
+      }
+    }
 
     if (!title) {
       return res.status(400).json({
@@ -117,6 +130,8 @@ export const createFlashList = async (req: AuthRequest, res: Response) => {
       title,
       user: userId,
       isPublic,
+      level,
+      thumbnail,
       flashcards: [],
     });
 
@@ -135,13 +150,66 @@ export const createFlashList = async (req: AuthRequest, res: Response) => {
     } as ApiResponse);
   }
 };
+//[POST] /api/flashcards/rate/:id - Đánh giá FlashList
+export const rateFlashList = async (req: AuthRequest, res: Response) => {
+  try {
+    const listId = req.params.id;
+    const userId = req.user?.id;
+    const { rating } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Bạn cần đăng nhập để đánh giá",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    if (typeof rating !== "number" || rating < 1 || rating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Đánh giá không hợp lệ",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    const flashList = await FlashList.findById(listId);
+    if (!flashList) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy FlashList",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Cập nhật đánh giá
+    flashList.rating =
+      (flashList.rating * flashList.ratingCount + rating) /
+      (flashList.ratingCount + 1);
+    flashList.ratingCount += 1;
+    await flashList.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Đánh giá FlashList thành công",
+      data: flashList,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Lỗi khi đánh giá FlashList:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi đánh giá FlashList",
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
 
 // [PUT] /api/flashcards/lists/:id - Cập nhật FlashList
 export const updateFlashList = async (req: AuthRequest, res: Response) => {
   try {
     const listId = req.params.id;
     const userId = req.user?.id;
-    const { title, isPublic } = req.body;
+    const { title, isPublic, level, thumbnail } = req.body;
 
     const flashList = await FlashList.findOne({ _id: listId, user: userId });
     if (!flashList) {
@@ -154,6 +222,8 @@ export const updateFlashList = async (req: AuthRequest, res: Response) => {
 
     if (title) flashList.title = title;
     if (typeof isPublic === "boolean") flashList.isPublic = isPublic;
+    if (level) flashList.level = level;
+    if (thumbnail) flashList.thumbnail = thumbnail;
 
     await flashList.save();
 
@@ -200,6 +270,25 @@ export const deleteFlashList = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Lỗi khi xóa FlashList",
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+//xóa all (tạm để dev)
+export const deleteAllFlashLists = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    await FlashList.deleteMany({ user: userId });
+    return res.status(200).json({
+      success: true,
+      message: "Xóa tất cả FlashList thành công",
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Lỗi khi xóa tất cả FlashList:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi xóa tất cả FlashList",
       timestamp: new Date().toISOString(),
     } as ApiResponse);
   }
@@ -281,7 +370,8 @@ export const getFlashCardById = async (req: AuthRequest, res: Response) => {
 export const createFlashCard = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { name, cards, cardsText } = req.body;
+    const { name, cards, cardsText, isPublic, thumbnail, description, level } =
+      req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -313,6 +403,10 @@ export const createFlashCard = async (req: AuthRequest, res: Response) => {
       name,
       cards: finalCards,
       user: userId,
+      isPublic: typeof isPublic === "boolean" ? isPublic : false,
+      thumbnail: thumbnail || undefined,
+      description: description || "",
+      level: level || "N5",
     });
 
     return res.status(201).json({
@@ -336,7 +430,7 @@ export const updateFlashCard = async (req: AuthRequest, res: Response) => {
   try {
     const cardId = req.params.id;
     const userId = req.user?.id;
-    const { name, cards } = req.body;
+    const { name, cards, isPublic, thumbnail, description, level } = req.body;
 
     const flashCard = await FlashCard.findOne({ _id: cardId, user: userId });
     if (!flashCard) {
@@ -349,6 +443,10 @@ export const updateFlashCard = async (req: AuthRequest, res: Response) => {
 
     if (name) flashCard.name = name;
     if (cards) flashCard.cards = cards;
+    if (typeof isPublic === "boolean") flashCard.isPublic = isPublic;
+    if (thumbnail) flashCard.thumbnail = thumbnail;
+    if (description !== undefined) flashCard.description = description;
+    if (level) flashCard.level = level;
 
     await flashCard.save();
 

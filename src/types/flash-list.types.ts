@@ -8,6 +8,11 @@ export interface IFlashList extends Document {
   isPublic: boolean;
   title: string;
   flashcards: Types.ObjectId[];
+  level: "N5" | "N4" | "N3" | "N2" | "N1";
+  thumbnail: string;
+  rating: number; // điểm trung bình
+  ratingCount: number; // số lượt đánh giá
   createdAt?: Date;
   updatedAt?: Date;
+  description: string;
 }

@@ -20,6 +20,24 @@ const flashCardSchema = new Schema<IFlashCard>(
         },
       },
     ],
+    isPublic: {
+      type: Boolean,
+      default: false,
+    },
+    thumbnail: {
+      type: String,
+      default:
+        "https://www.senviet.art/wp-content/uploads/2021/12/duytanuni.jpg",
+    },
+    description: {
+      type: String,
+      default: "",
+    },
+    level: {
+      type: String,
+      enum: ["N5", "N4", "N3", "N2", "N1"],
+      default: "N5",
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: User,

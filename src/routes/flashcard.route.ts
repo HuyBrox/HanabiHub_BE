@@ -6,6 +6,7 @@ import {
   createFlashList,
   updateFlashList,
   deleteFlashList,
+  rateFlashList,
 
   // FlashCard Management
   getAllFlashCards,
@@ -25,9 +26,10 @@ import {
   // Study & Practice
   getStudyData,
   getStudyDataFromList,
+  deleteAllFlashLists,
 } from "../controllers/flashcard.controller";
 import { isAuth } from "../middleware/isAuth";
-
+import upload from "../middleware/multer";
 const router = express.Router();
 
 //====================FlashList Routes======================
@@ -38,7 +40,12 @@ router.get("/get-all-flashlists", isAuth, getAllFlashLists);
 router.get("/get-flashlist-detail/:id", isAuth, getFlashListById);
 
 // Tạo FlashList mới
-router.post("/create-flashlist", isAuth, createFlashList);
+router.post(
+  "/create-flashlist",
+  isAuth,
+  upload.single("thumbnail"),
+  createFlashList
+);
 
 // Cập nhật FlashList
 router.put("/update-flashlist/:id", isAuth, updateFlashList);
@@ -48,6 +55,11 @@ router.delete("/delete-flashlist/:id", isAuth, deleteFlashList);
 
 // Lấy dữ liệu học tập từ FlashList
 router.get("/study-flashlist/:id", isAuth, getStudyDataFromList);
+
+//đánh giá FlashList
+router.post("/rate-flashlist/:id", isAuth, rateFlashList);
+//xóa hết (để dev)
+router.delete("/delete-all", isAuth, deleteAllFlashLists);
 
 //====================FlashCard Routes======================
 // Lấy tất cả FlashCard của user
