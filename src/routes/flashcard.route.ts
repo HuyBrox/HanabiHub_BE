@@ -27,6 +27,8 @@ import {
   getStudyData,
   getStudyDataFromList,
   deleteAllFlashLists,
+  searchFlashList,
+  searchFlashCard,
 } from "../controllers/flashcard.controller";
 import { isAuth } from "../middleware/isAuth";
 import upload from "../middleware/multer";
@@ -107,3 +109,9 @@ router.delete(
 );
 
 export default router;
+
+//====================Search Routes======================
+// Tìm kiếm FlashList
+router.get("/search-flashlist", isAuth, searchFlashList);
+// Tìm kiếm FlashCard
+router.get("/search-flashcard", isAuth, searchFlashCard);

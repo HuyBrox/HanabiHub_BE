@@ -861,3 +861,133 @@ export const getStudyDataFromList = async (req: AuthRequest, res: Response) => {
     } as ApiResponse);
   }
 };
+//========================Tìm kiếm===========================
+export const searchFlashList = async (req: AuthRequest, res: Response) => {
+  try {
+    const query = req.query.q as string;
+    const { level, select } = req.query as any;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+    const userId = req.user?.id;
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu từ khóa tìm kiếm",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    const regex = new RegExp(query, "i");
+    // Build filter
+    let filter: any = {
+      $and: [{ $or: [{ title: regex }, { description: regex }] }],
+    };
+    // Filter by level
+    if (level && level !== "all") {
+      filter.$and.push({ level });
+    }
+    // Filter by select
+    if (select === "me") {
+      filter.$and.push({ user: userId });
+    } else if (select === "other") {
+      filter.$and.push({ user: { $ne: userId }, isPublic: true });
+    } else {
+      // all: public hoặc của mình
+      filter.$and.push({ $or: [{ isPublic: true }, { user: userId }] });
+    }
+    const [results, total] = await Promise.all([
+      FlashList.find(filter)
+        .populate("user", "fullname username avatar")
+        .populate("flashcards", "name")
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      FlashList.countDocuments(filter),
+    ]);
+    return res.status(200).json({
+      success: true,
+      message: "Tìm kiếm FlashList thành công",
+      data: {
+        results,
+        pagination: {
+          currentPage: page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Lỗi khi tìm kiếm FlashList:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi tìm kiếm FlashList",
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+export const searchFlashCard = async (req: AuthRequest, res: Response) => {
+  try {
+    const query = req.query.q as string;
+    const { level, select } = req.query as any;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+    const userId = req.user?.id;
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu từ khóa tìm kiếm",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+    const regex = new RegExp(query, "i");
+    // Build filter
+    let filter: any = {
+      $and: [{ $or: [{ name: regex }, { description: regex }] }],
+    };
+    // Filter by level
+    if (level && level !== "all") {
+      filter.$and.push({ level });
+    }
+    // Filter by select
+    if (select === "me") {
+      filter.$and.push({ user: userId });
+    } else if (select === "other") {
+      filter.$and.push({ user: { $ne: userId }, isPublic: true });
+    } else {
+      // all: public hoặc của mình
+      filter.$and.push({ $or: [{ isPublic: true }, { user: userId }] });
+    }
+    const [results, total] = await Promise.all([
+      FlashCard.find(filter)
+        .populate("user", "fullname username avatar")
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      FlashCard.countDocuments(filter),
+    ]);
+    return res.status(200).json({
+      success: true,
+      message: "Tìm kiếm FlashCard thành công",
+      data: {
+        results,
+        pagination: {
+          currentPage: page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Lỗi khi tìm kiếm FlashCard:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi tìm kiếm FlashCard",
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
