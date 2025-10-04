@@ -30,12 +30,23 @@ export const getAllFlashLists = async (req: AuthRequest, res: Response) => {
       FlashList.countDocuments({ user: userId }),
     ]);
 
+    // compute averageRating for lists
+    const mapWithAvg = (list: any) => {
+      const ratings = Array.isArray(list.ratings) ? list.ratings : [];
+      const sum = ratings.reduce(
+        (acc: number, r: any) => acc + (r.rating || 0),
+        0
+      );
+      const avg = ratings.length ? sum / ratings.length : 0;
+      return { ...list.toObject(), averageRating: avg };
+    };
+
     return res.status(200).json({
       success: true,
       message: "Lấy danh sách FlashList thành công",
       data: {
-        publicLists,
-        myLists,
+        publicLists: publicLists.map(mapWithAvg),
+        myLists: myLists.map(mapWithAvg),
         pagination: {
           currentPage: page,
           limit,
@@ -84,10 +95,20 @@ export const getFlashListById = async (req: AuthRequest, res: Response) => {
       } as ApiResponse);
     }
 
+    // include computed averageRating
+    const ratingsArr = Array.isArray(flashList.ratings)
+      ? flashList.ratings
+      : [];
+    const sum = ratingsArr.reduce(
+      (acc: number, r: any) => acc + (r.rating || 0),
+      0
+    );
+    const avg = ratingsArr.length ? sum / ratingsArr.length : 0;
+
     return res.status(200).json({
       success: true,
       message: "Lấy FlashList thành công",
-      data: flashList,
+      data: { ...flashList.toObject(), averageRating: avg },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
@@ -104,11 +125,12 @@ export const getFlashListById = async (req: AuthRequest, res: Response) => {
 export const createFlashList = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { title, isPublic, level, description } = req.body as {
+    const { title, isPublic, level, description, flashcards } = req.body as {
       title: string;
       isPublic?: boolean;
       level?: string;
       description?: string;
+      flashcards?: string[];
     };
     let thumbnail: any = req.file as undefined;
     if (thumbnail) {
@@ -132,13 +154,16 @@ export const createFlashList = async (req: AuthRequest, res: Response) => {
       isPublic,
       level,
       thumbnail,
-      flashcards: [],
+      flashcards: flashcards || [],
+      description,
     });
 
+    // compute averageRating (new list has no ratings yet)
+    const avgCreated = 0;
     return res.status(201).json({
       success: true,
       message: "Tạo FlashList thành công",
-      data: flashList,
+      data: { ...flashList.toObject(), averageRating: avgCreated },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
@@ -181,17 +206,46 @@ export const rateFlashList = async (req: AuthRequest, res: Response) => {
       } as ApiResponse);
     }
 
-    // Cập nhật đánh giá
-    flashList.rating =
-      (flashList.rating * flashList.ratingCount + rating) /
-      (flashList.ratingCount + 1);
-    flashList.ratingCount += 1;
+    // Kiểm tra user phải đăng nhập
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Bạn cần đăng nhập để đánh giá",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Ensure ratings array exists
+    if (!Array.isArray(flashList.ratings)) flashList.ratings = [];
+
+    // Find existing rating by this user
+    const existingIndex = flashList.ratings.findIndex(
+      (r: any) => r.user.toString() === userId
+    );
+
+    if (existingIndex !== -1) {
+      // Update existing rating
+      flashList.ratings[existingIndex].rating = rating;
+    } else {
+      // Add new rating
+      flashList.ratings.push({ user: userId as any, rating });
+    }
+
+    // Recalculate average rating from ratings array
+    const sum = flashList.ratings.reduce(
+      (acc: number, r: any) => acc + r.rating,
+      0
+    );
+    const avgRating = flashList.ratings.length
+      ? sum / flashList.ratings.length
+      : 0;
     await flashList.save();
 
+    // Return flashList along with computed averageRating (field removed from schema)
     return res.status(200).json({
       success: true,
       message: "Đánh giá FlashList thành công",
-      data: flashList,
+      data: { ...flashList.toObject(), averageRating: avgRating },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
@@ -227,10 +281,20 @@ export const updateFlashList = async (req: AuthRequest, res: Response) => {
 
     await flashList.save();
 
+    // include computed averageRating
+    const ratingsArr = Array.isArray(flashList.ratings)
+      ? flashList.ratings
+      : [];
+    const sum = ratingsArr.reduce(
+      (acc: number, r: any) => acc + (r.rating || 0),
+      0
+    );
+    const avgUpdated = ratingsArr.length ? sum / ratingsArr.length : 0;
+
     return res.status(200).json({
       success: true,
       message: "Cập nhật FlashList thành công",
-      data: flashList,
+      data: { ...flashList.toObject(), averageRating: avgUpdated },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
@@ -370,8 +434,26 @@ export const getFlashCardById = async (req: AuthRequest, res: Response) => {
 export const createFlashCard = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { name, cards, cardsText, isPublic, thumbnail, description, level } =
-      req.body;
+
+    const { name, cards, isPublic, description, level } = req.body;
+    let thumbnail: any = req.file as undefined;
+    if (thumbnail) {
+      const uploadedImage = await uploadImage(thumbnail);
+      if (uploadedImage) {
+        thumbnail = uploadedImage;
+      }
+    } else {
+      thumbnail = req.body.thumbnail;
+    }
+
+    let cardsData = cards;
+    if (typeof cards === "string") {
+      try {
+        cardsData = JSON.parse(cards);
+      } catch {
+        cardsData = [];
+      }
+    }
 
     if (!name) {
       return res.status(400).json({
@@ -381,27 +463,9 @@ export const createFlashCard = async (req: AuthRequest, res: Response) => {
       } as ApiResponse);
     }
 
-    let finalCards = cards || [];
-
-    // Xử lý cardsText như code cũ (nếu có)
-    if (cardsText && typeof cardsText === "string") {
-      const parsedCards = cardsText
-        .trim()
-        .split("\n")
-        .map((line) => {
-          const [vocabulary, meaning] = line
-            .split("-")
-            .map((item) => item.trim());
-          return { vocabulary, meaning };
-        })
-        .filter((card) => card.vocabulary && card.meaning);
-
-      finalCards = [...finalCards, ...parsedCards];
-    }
-
     const flashCard = await FlashCard.create({
       name,
-      cards: finalCards,
+      cards: cardsData || [],
       user: userId,
       isPublic: typeof isPublic === "boolean" ? isPublic : false,
       thumbnail: thumbnail || undefined,

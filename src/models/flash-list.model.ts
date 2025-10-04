@@ -32,14 +32,21 @@ const flashListSchema = new Schema<IFlashList>(
       default:
         "https://tse1.mm.bing.net/th/id/OIP.rc3gjFWuSBAb9IMTQHaHKQAAAA?rs=1&pid=ImgDetMain&o=7&rm=3",
     },
-    rating: {
-      type: Number,
-      default: 0,
-    }, // điểm trung bình
-    ratingCount: {
-      type: Number,
-      default: 0,
-    }, // số lượt đánh giá
+    // rating field removed: average rating is computed from `ratings` array
+    // ratings: store each user's rating so we can update/remove later
+    ratings: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: User,
+        },
+        rating: {
+          type: Number,
+          min: 1,
+          max: 5,
+        },
+      },
+    ],
     flashcards: [
       {
         type: mongoose.Schema.Types.ObjectId,

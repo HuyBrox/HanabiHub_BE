@@ -71,10 +71,20 @@ router.get("/get-all-flashcards", isAuth, getAllFlashCards);
 router.get("/get-flashcard-detail/:id", isAuth, getFlashCardById);
 
 // Tạo FlashCard mới
-router.post("/create-flashcard", isAuth, createFlashCard);
+router.post(
+  "/create-flashcard",
+  isAuth,
+  upload.single("thumbnail"),
+  createFlashCard
+);
 
 // Cập nhật FlashCard
-router.put("/update-flashcard/:id", isAuth, updateFlashCard);
+router.put(
+  "/update-flashcard/:id",
+  isAuth,
+  upload.single("thumbnail"),
+  updateFlashCard
+);
 
 // Xóa FlashCard
 router.delete("/delete-flashcard/:id", isAuth, deleteFlashCard);
@@ -108,10 +118,10 @@ router.delete(
   removeFlashCardFromList
 );
 
-export default router;
-
 //====================Search Routes======================
 // Tìm kiếm FlashList
 router.get("/search-flashlist", isAuth, searchFlashList);
 // Tìm kiếm FlashCard
 router.get("/search-flashcard", isAuth, searchFlashCard);
+
+export default router;
