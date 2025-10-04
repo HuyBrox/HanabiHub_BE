@@ -10,8 +10,13 @@ export interface IFlashList extends Document {
   flashcards: Types.ObjectId[];
   level: "N5" | "N4" | "N3" | "N2" | "N1";
   thumbnail: string;
-  rating: number; // điểm trung bình
-  ratingCount: number; // số lượt đánh giá
+  // `rating` removed from schema; average rating should be computed from `ratings` when needed
+  averageRating?: number; // optional computed value returned by controllers
+  // ratings stores per-user ratings so updates/changes can be handled
+  ratings?: {
+    user: Types.ObjectId;
+    rating: number;
+  }[];
   createdAt?: Date;
   updatedAt?: Date;
   description: string;
