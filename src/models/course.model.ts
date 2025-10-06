@@ -1,50 +1,59 @@
-import e from 'connect-flash';
-import mongoose from 'mongoose';
-import { de } from 'zod/v4/locales/index.cjs';
-
-const CourseSchema = new mongoose.Schema({
+import e from "connect-flash";
+import mongoose from "mongoose";
+import { de } from "zod/v4/locales/index.cjs";
+import User from "./user.model";
+const CourseSchema = new mongoose.Schema(
+  {
     title: {
-        type: String,
-        required: true,
-        unique: true,
+      type: String,
+      required: true,
+      unique: true,
     },
     description: {
-        type: String,
-        max: 500,
+      type: String,
+      max: 500,
     },
     //instructor là giảng viên của khóa học, tham chiếu đến model User
     instructor: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
 
     //price là giá của khóa học, mặc định là 0
     price: {
-        type: Number,
-        default: 0,
+      type: Number,
+      default: 0,
     },
     //lessons là mảng chứa các bài học
     lessons: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Lesson',
-        },
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Lesson",
+      },
     ],
     thumbnail: {
-        type: String,
-        default: 'https://i.postimg.cc/LXt5Hbnf/image.png',
-        required: false,
+      type: String,
+      default: "https://i.postimg.cc/LXt5Hbnf/image.png",
+      required: false,
     },
     //sao
-    averageRating: {
-        type: Number,
-        default: 5,
-        max: 5,
-        min: 0,
-    },
+    ratings: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: User,
+        },
+        rating: {
+          type: Number,
+          min: 1,
+          max: 5,
+        },
+      },
+    ],
+  },
+  { timestamps: true }
+);
 
-}, { timestamps: true });
-
-const Course = mongoose.model('Course', CourseSchema);
+const Course = mongoose.model("Course", CourseSchema);
 export default Course;

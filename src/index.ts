@@ -11,6 +11,7 @@ import { ExpressPeerServer } from "peer";
 import { app, server } from "./socket/socket-server";
 import routes from "./routes";
 import connectDB from "./utils/db";
+import { cleanup as cleanupLearningTracker } from "./middleware/learning-tracker";
 
 dotenv.config();
 
@@ -112,4 +113,27 @@ server.listen(PORT, async () => {
   console.log(` Môi trường: ${process.env.NODE_ENV || "development"}`);
 });
 
-export default app;
+// Graceful shutdown
+const shutdown = async (signal: string) => {
+  console.log(`\n${signal} được gửi. Đang tắt máy dần...`);
+
+  // Close BullMQ worker, queue, and Redis connection
+  await cleanupLearningTracker();
+
+  // Close server
+  server.close(() => {
+    console.log("✅ Server closed");
+    process.exit(0);
+  });
+
+  // Force exit after 10 seconds
+  setTimeout(() => {
+    console.error("⚠️ Đóng máy bắt buộc sau thời gian chờ");
+    process.exit(1);
+  }, 10000);
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+
+
