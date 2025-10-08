@@ -345,16 +345,18 @@ export const trackCardLearning = async (
     }
 
     // Determine mastery level
-    let masteryLevel: "new" | "learning" | "mastered" = "new";
+    let masteryLevel: "learning" | "reviewing" | "mastered" = "learning";
     if (difficulty === "easy" || (isCorrect && reviewCount >= 3)) {
       masteryLevel = "mastered";
-    } else if (isCorrect) {
+    } else if (isCorrect && reviewCount >= 2) {
+      masteryLevel = "reviewing";
+    } else {
       masteryLevel = "learning";
     }
 
     // Add or update card learning
     activity.cardLearning.push({
-      cardId: new mongoose.Types.ObjectId(cardId),
+      cardId: new mongoose.Types.ObjectId(cardId), // luôn lưu ObjectId
       flashcardId: new mongoose.Types.ObjectId(flashcardId),
       isCorrect: isCorrect || false,
       masteryLevel,

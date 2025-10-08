@@ -105,7 +105,7 @@ const userActivitySchema = new mongoose.Schema(
         },
         isCorrect: Boolean,
         responseTime: Number, // milliseconds
-        masteryLevel: {
+        masteryLevel: { // là trạng thái hiện tại của thẻ
           type: String,
           enum: ["learning", "reviewing", "mastered"],
           default: "learning",

@@ -5,7 +5,7 @@ import postRoutes from "./post.route";
 import flashcardRoutes from "./flashcard.route";
 import messageRoutes from "./message.route";
 import adminRoutes from "./admin.route";
-
+import userActivityRoutes from "./user-activity.route";
 const router: Router = Router();
 
 // Auth routes
@@ -21,5 +21,8 @@ router.use("/message", messageRoutes);
 
 // Admin routes
 router.use("/admin", adminRoutes);
+
+// User Activity tracking routes
+router.use("/activity", userActivityRoutes);
 
 export default router;

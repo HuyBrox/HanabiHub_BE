@@ -3,6 +3,7 @@ import { Document, Types } from "mongoose";
 
 // Interface cơ bản cho Card item
 export interface ICardItem {
+  _id?: import("mongoose").Types.ObjectId;
   vocabulary: string;
   meaning: string;
 }

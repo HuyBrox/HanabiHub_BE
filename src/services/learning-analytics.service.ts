@@ -326,7 +326,7 @@ class LearningAnalyticsService {
     const cardFailCount = new Map<string, number>();
     cardLearning.forEach((card) => {
       if (!card.isCorrect) {
-        const key = card.cardId.toString();
+        const key = card.cardId.toString(); // ObjectId luôn dùng toString
         cardFailCount.set(key, (cardFailCount.get(key) || 0) + 1);
       }
     });
