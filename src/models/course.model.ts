@@ -32,6 +32,13 @@ const CourseSchema = new mongoose.Schema(
         ref: "Lesson",
       },
     ],
+    //students là mảng chứa các học viên đăng ký khóa học
+    students: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     thumbnail: {
       type: String,
       default: "https://i.postimg.cc/LXt5Hbnf/image.png",

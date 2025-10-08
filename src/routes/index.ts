@@ -4,6 +4,7 @@ import authRoutes from "./auth.route";
 import postRoutes from "./post.route";
 import flashcardRoutes from "./flashcard.route";
 import messageRoutes from "./message.route";
+import adminRoutes from "./admin.route";
 
 const router: Router = Router();
 
@@ -17,5 +18,8 @@ router.use("/posts", postRoutes);
 router.use("/flashcards", flashcardRoutes);
 // Message routes
 router.use("/message", messageRoutes);
+
+// Admin routes
+router.use("/admin", adminRoutes);
 
 export default router;
