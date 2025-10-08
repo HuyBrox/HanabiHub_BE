@@ -61,6 +61,34 @@ const learningInsightsSchema = new mongoose.Schema(
         averageResponseTime: Number, // milliseconds
         dailyRetention: Number, // % cards remembered day after
       },
+
+      // Skill tracking (Nghe, Nói, Đọc, Viết)
+      skillMastery: {
+        listening: {
+          level: Number, // 0-100
+          tasksCompleted: Number,
+          averageScore: Number, // %
+          lastPracticed: Date,
+        },
+        speaking: {
+          level: Number, // 0-100
+          tasksCompleted: Number,
+          averageScore: Number, // %
+          lastPracticed: Date,
+        },
+        reading: {
+          level: Number, // 0-100
+          tasksCompleted: Number,
+          averageScore: Number, // %
+          lastPracticed: Date,
+        },
+        writing: {
+          level: Number, // 0-100
+          tasksCompleted: Number,
+          averageScore: Number, // %
+          lastPracticed: Date,
+        },
+      },
     },
 
     // Study patterns và thói quen học tập

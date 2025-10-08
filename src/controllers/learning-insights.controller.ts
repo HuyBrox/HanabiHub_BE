@@ -152,6 +152,60 @@ export const getFlashcardMastery = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Lấy skill mastery (Nghe, Nói, Đọc, Viết)
+export const getSkillMastery = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const insights = await LearningInsights.findOne({ userId });
+
+    if (!insights) {
+      return res.status(404).json({
+        message: "No skill data available",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: insights.learningAnalysis?.skillMastery || {
+        listening: {
+          level: 0,
+          tasksCompleted: 0,
+          averageScore: 0,
+          lastPracticed: null,
+        },
+        speaking: {
+          level: 0,
+          tasksCompleted: 0,
+          averageScore: 0,
+          lastPracticed: null,
+        },
+        reading: {
+          level: 0,
+          tasksCompleted: 0,
+          averageScore: 0,
+          lastPracticed: null,
+        },
+        writing: {
+          level: 0,
+          tasksCompleted: 0,
+          averageScore: 0,
+          lastPracticed: null,
+        },
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // Lấy study patterns
 export const getStudyPatterns = async (req: AuthRequest, res: Response) => {
   try {

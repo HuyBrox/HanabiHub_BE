@@ -140,6 +140,7 @@ export const trackTaskActivity = async (
       courseId,
       lessonId,
       lessonTitle,
+      taskType, // Loại task: multiple_choice, fill_blank, listening, matching, speaking, reading
       score, // điểm số của bài làm
       maxScore = 100, // mặc định 100
       correctAnswers, // số câu đúng
@@ -171,6 +172,7 @@ export const trackTaskActivity = async (
       lessonId: new mongoose.Types.ObjectId(lessonId),
       lessonTitle,
       lessonType: "task" as const,
+      taskType: taskType, // Lưu taskType
       isCompleted: isPassed,
       completedAt: isPassed
         ? completedAt
@@ -184,6 +186,7 @@ export const trackTaskActivity = async (
         maxScore,
         correctAnswers,
         totalQuestions,
+        isPassed,
         attempts: 1,
       },
     };

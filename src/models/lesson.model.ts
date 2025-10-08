@@ -1,5 +1,5 @@
 import mongoose, { Schema, Model } from "mongoose";
-import { ILesson, LessonType } from "../types/lesson.types";
+import { ILesson, LessonType, TaskType } from "../types/lesson.types";
 import Comment from "./comment.model";
 
 const lessonSchema = new Schema<ILesson>({
@@ -20,8 +20,25 @@ const lessonSchema = new Schema<ILesson>({
     type: mongoose.Schema.Types.Mixed, //types.Mixed để lưu trữ dữ liệu JSON
     default: null,
   },
+  taskType: {
+    type: String,
+    enum: [
+      "multiple_choice",
+      "fill_blank",
+      "listening",
+      "matching",
+      "speaking",
+      "reading",
+    ] as TaskType[],
+    default: null,
+  },
   videoUrl: {
     type: String,
+  },
+  videoType: {
+    type: String,
+    enum: ["upload", "youtube"],
+    default: "youtube",
   },
   userCompleted: [
     //mảng user đã hoàn thành bài học
@@ -41,6 +58,12 @@ const lessonSchema = new Schema<ILesson>({
 lessonSchema.pre("save", function (next) {
   if (this.type === "task" && !this.jsonTask) {
     return next(new Error("jsonTask is required for task type"));
+  }
+  if (this.type === "task" && this.jsonTask) {
+    // Tự động parse taskType từ jsonTask nếu có
+    if (this.jsonTask.type) {
+      this.taskType = this.jsonTask.type;
+    }
   }
   if (this.type === "video" && !this.videoUrl) {
     return next(new Error("videoUrl is required for video type"));

@@ -124,6 +124,13 @@ class ActivityTrackerHelper {
       lessonId: mongoose.Types.ObjectId;
       courseId?: mongoose.Types.ObjectId;
       lessonType: "video" | "task";
+      taskType?:
+        | "multiple_choice"
+        | "fill_blank"
+        | "listening"
+        | "matching"
+        | "speaking"
+        | "reading";
       timeSpent: number; // seconds
       videoData?: {
         watchedDuration: number;
@@ -158,6 +165,9 @@ class ActivityTrackerHelper {
         lesson.timeSpent = (lesson.timeSpent || 0) + lessonData.timeSpent;
         lesson.attempts = (lesson.attempts || 0) + 1;
 
+        if (lessonData.taskType) {
+          lesson.taskType = lessonData.taskType;
+        }
         if (lessonData.videoData) {
           lesson.videoData = lessonData.videoData;
         }
@@ -170,6 +180,7 @@ class ActivityTrackerHelper {
           lessonId: lessonData.lessonId,
           courseId: lessonData.courseId,
           lessonType: lessonData.lessonType,
+          taskType: lessonData.taskType,
           startedAt: new Date(),
           completedAt: new Date(),
           timeSpent: lessonData.timeSpent,
