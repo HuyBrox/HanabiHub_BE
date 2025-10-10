@@ -21,7 +21,7 @@ router.get("/", getAllCourses);
 router.get("/:id", getCourseById);
 
 // Tạo mới khoá học (Admin only)
-router.post("/", isAuth, isAdmin, createCourse);
+router.post("/", isAuth, isAdmin, multer.single("thumbnail"), createCourse);
 
 // Cập nhật khoá học (Admin only)
 router.put("/:id", isAuth, isAdmin, updateCourse);
