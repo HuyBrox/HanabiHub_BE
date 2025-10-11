@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Post from "../models/post.model";
 import { ApiResponse, IPost, AuthRequest } from "../types";
+import { deleteMediaById } from "../helpers/upload-media";
 
 // [GET] /api/posts - Lấy tất cả posts
 export const getAllPosts = async (req: Request, res: Response) => {
@@ -71,6 +72,19 @@ export const createPost = async (req: AuthRequest, res: Response) => {
       tags?: string[];
     } = req.body;
     const authorId = req.user?.id; // Giả sử có middleware auth
+
+    // Kiểm tra phải có ít nhất content hoặc images
+    const hasContent = createData.content && createData.content.trim() !== "";
+    const hasImages =
+      Array.isArray(createData.images) && createData.images.length > 0;
+    if (!hasContent && !hasImages) {
+      return res.status(400).json({
+        success: false,
+        message: "Phải có ít nhất nội dung hoặc hình ảnh.",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
 
     if (!authorId) {
       return res.status(401).json({
@@ -189,6 +203,20 @@ export const deletePost = async (req: AuthRequest, res: Response) => {
         data: null,
         timestamp: new Date().toISOString(),
       } as ApiResponse);
+    }
+
+    // Xóa ảnh trên cloud nếu có
+    if (post.img) {
+      // img có thể là url, cần lấy publicId từ url
+      const matches = post.img.match(/\/([^/.]+)\.[a-zA-Z]+$/);
+      const publicId = matches ? matches[1] : null;
+      if (publicId) {
+        try {
+          await deleteMediaById(publicId, "image");
+        } catch (err) {
+          console.error("Error deleting image from cloudinary:", err);
+        }
+      }
     }
 
     await Post.findByIdAndDelete(postId);
