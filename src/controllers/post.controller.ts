@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
 import Post from "../models/post.model";
 import { ApiResponse, IPost, AuthRequest } from "../types";
-import { deleteMediaById } from "../helpers/upload-media";
-
-// [GET] /api/posts - Lấy tất cả posts
+import { deleteMediaById, uploadImage } from "../helpers/upload-media";
+//hàm create chưa có upload image
+//update cugnx vậy (update ảnh khác nhớ xóa ảnh cũ trên cloudinary)
+// [GET] /api/posts - Lấy tất cả posts (chưa phân trang)
 export const getAllPosts = async (req: Request, res: Response) => {
   try {
     const posts: IPost[] = await Post.find()
@@ -273,7 +274,7 @@ export const toggleLikePost = async (req: AuthRequest, res: Response) => {
       // Unlike post
       post.likes.splice(userIndex, 1);
     }
-
+    //commit đỡ nghe, code chưa phân trang
     await post.save();
 
     return res.status(200).json({
