@@ -124,6 +124,13 @@ class ActivityTrackerHelper {
       lessonId: mongoose.Types.ObjectId;
       courseId?: mongoose.Types.ObjectId;
       lessonType: "video" | "task";
+      taskType?:
+        | "multiple_choice"
+        | "fill_blank"
+        | "listening"
+        | "matching"
+        | "speaking"
+        | "reading";
       timeSpent: number; // seconds
       videoData?: {
         watchedDuration: number;
@@ -158,6 +165,9 @@ class ActivityTrackerHelper {
         lesson.timeSpent = (lesson.timeSpent || 0) + lessonData.timeSpent;
         lesson.attempts = (lesson.attempts || 0) + 1;
 
+        if (lessonData.taskType) {
+          lesson.taskType = lessonData.taskType;
+        }
         if (lessonData.videoData) {
           lesson.videoData = lessonData.videoData;
         }
@@ -170,6 +180,7 @@ class ActivityTrackerHelper {
           lessonId: lessonData.lessonId,
           courseId: lessonData.courseId,
           lessonType: lessonData.lessonType,
+          taskType: lessonData.taskType,
           startedAt: new Date(),
           completedAt: new Date(),
           timeSpent: lessonData.timeSpent,
@@ -247,8 +258,8 @@ class ActivityTrackerHelper {
   async trackCardLearning(
     userId: string | mongoose.Types.ObjectId,
     cardData: {
-      cardId: mongoose.Types.ObjectId;
-      flashcardId: mongoose.Types.ObjectId;
+      cardId: string | mongoose.Types.ObjectId;
+      flashcardId: string | mongoose.Types.ObjectId;
       isCorrect: boolean;
       responseTime: number; // milliseconds
     }
@@ -278,8 +289,8 @@ class ActivityTrackerHelper {
 
       // Add card learning record
       activity.cardLearning.push({
-        cardId: cardData.cardId,
-        flashcardId: cardData.flashcardId,
+        cardId: new mongoose.Types.ObjectId(cardData.cardId),
+        flashcardId: new mongoose.Types.ObjectId(cardData.flashcardId),
         reviewedAt: new Date(),
         isCorrect: cardData.isCorrect,
         responseTime: cardData.responseTime,

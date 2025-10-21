@@ -4,6 +4,7 @@ import {
   getPerformanceOverview,
   getCourseProgress,
   getFlashcardMastery,
+  getSkillMastery,
   getStudyPatterns,
   forceUpdateInsights,
   getStudyRecommendations,
@@ -23,6 +24,9 @@ router.get("/course-progress", isAuth, getCourseProgress);
 
 // Lấy flashcard mastery
 router.get("/flashcard-mastery", isAuth, getFlashcardMastery);
+
+// Lấy skill mastery (Nghe, Nói, Đọc, Viết)
+router.get("/skill-mastery", isAuth, getSkillMastery);
 
 // Lấy study patterns
 router.get("/study-patterns", isAuth, getStudyPatterns);

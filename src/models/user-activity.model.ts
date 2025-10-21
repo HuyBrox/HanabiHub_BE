@@ -45,6 +45,17 @@ const userActivitySchema = new mongoose.Schema(
           enum: ["video", "task"],
           required: true,
         },
+        taskType: {
+          type: String,
+          enum: [
+            "multiple_choice",
+            "fill_blank",
+            "listening",
+            "matching",
+            "speaking",
+            "reading",
+          ],
+        },
         startedAt: Date,
         completedAt: Date,
         timeSpent: Number, // seconds
@@ -106,6 +117,7 @@ const userActivitySchema = new mongoose.Schema(
         isCorrect: Boolean,
         responseTime: Number, // milliseconds
         masteryLevel: {
+          // là trạng thái hiện tại của thẻ
           type: String,
           enum: ["learning", "reviewing", "mastered"],
           default: "learning",

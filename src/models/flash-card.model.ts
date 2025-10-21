@@ -10,6 +10,10 @@ const flashCardSchema = new Schema<IFlashCard>(
     },
     cards: [
       {
+        _id: {
+          type: mongoose.Schema.Types.ObjectId,
+          default: () => new mongoose.Types.ObjectId(),
+        },
         vocabulary: {
           type: String,
           required: true,

@@ -47,10 +47,6 @@ const UserSchema = new Schema<IUser>(
     address: {
       type: String,
     },
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Course",
-    },
     lastActiveAt: {
       type: Date,
       default: Date.now,

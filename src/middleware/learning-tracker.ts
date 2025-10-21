@@ -28,11 +28,11 @@ const worker = new Worker(
   "learning-insights",
   async (job) => {
     const { userId } = job.data;
-    console.log(`🔄 Processing learning insights for user ${userId}`);
+    console.log(`🔄 Đang xử lý cập nhật học tập cho user: ${userId}`);
 
     try {
       await learningAnalyticsService.updateLearningInsights(userId);
-      console.log(`✅ Learning insights updated for user ${userId}`);
+      console.log(`✅ Đã cập nhật học tập cho user: ${userId}`);
       return { success: true, userId };
     } catch (error: any) {
       console.error(
@@ -50,11 +50,13 @@ const worker = new Worker(
 
 // Event listeners for monitoring
 worker.on("completed", (job) => {
-  console.log(`✅ Job ${job.id} completed for user ${job.data.userId}`);
+  console.log(`✅ Hoàn thành cập nhật cho user: ${job.data.userId}`);
 });
 
 worker.on("failed", (job, err) => {
-  console.error(`❌ Job ${job?.id} failed:`, err.message);
+  console.error(
+    `❌ Lỗi cập nhật cho user: ${job?.data?.userId}. ${err.message}`
+  );
 });
 
 /**
@@ -74,7 +76,7 @@ export const queueLearningUpdate = async (userId: string) => {
       }
     );
 
-    console.log(`📝 Queued learning update for user ${userId}`);
+    console.log(`📝 Đã xếp hàng cập nhật học tập cho user: ${userId}`);
   } catch (error: any) {
     console.error(
       `❌ Failed to queue learning update for ${userId}:`,
@@ -106,7 +108,7 @@ export const forceUpdateNow = async (userId: string) => {
       }
     );
 
-    console.log(`⚡ Force queued learning update for user ${userId}`);
+    console.log(`⚡ Đã ép cập nhật học tập cho user: ${userId}`);
     return { success: true };
   } catch (error: any) {
     console.error(`❌ Force update failed for ${userId}:`, error.message);
@@ -145,7 +147,7 @@ export const getQueueStatus = async () => {
 export const clearAllPendingUpdates = async () => {
   try {
     await learningInsightsQueue.drain();
-    console.log("🧹 Cleared all pending learning updates");
+    console.log("🧹 Đã xoá toàn bộ nhiệm vụ cập nhật học tập đang chờ");
   } catch (error: any) {
     console.error("Failed to clear pending updates:", error.message);
   }
@@ -158,5 +160,5 @@ export const cleanup = async () => {
   await worker.close();
   await learningInsightsQueue.close();
   await redisConnection.quit();
-  console.log("🔌 Learning tracker cleanup completed");
+  console.log("🔌 Đã dọn dẹp xong learning tracker");
 };

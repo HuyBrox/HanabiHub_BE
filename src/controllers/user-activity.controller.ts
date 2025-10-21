@@ -140,6 +140,7 @@ export const trackTaskActivity = async (
       courseId,
       lessonId,
       lessonTitle,
+      taskType, // Loại task: multiple_choice, fill_blank, listening, matching, speaking, reading
       score, // điểm số của bài làm
       maxScore = 100, // mặc định 100
       correctAnswers, // số câu đúng
@@ -171,6 +172,7 @@ export const trackTaskActivity = async (
       lessonId: new mongoose.Types.ObjectId(lessonId),
       lessonTitle,
       lessonType: "task" as const,
+      taskType: taskType, // Lưu taskType
       isCompleted: isPassed,
       completedAt: isPassed
         ? completedAt
@@ -184,6 +186,7 @@ export const trackTaskActivity = async (
         maxScore,
         correctAnswers,
         totalQuestions,
+        isPassed,
         attempts: 1,
       },
     };
@@ -345,16 +348,18 @@ export const trackCardLearning = async (
     }
 
     // Determine mastery level
-    let masteryLevel: "new" | "learning" | "mastered" = "new";
+    let masteryLevel: "learning" | "reviewing" | "mastered" = "learning";
     if (difficulty === "easy" || (isCorrect && reviewCount >= 3)) {
       masteryLevel = "mastered";
-    } else if (isCorrect) {
+    } else if (isCorrect && reviewCount >= 2) {
+      masteryLevel = "reviewing";
+    } else {
       masteryLevel = "learning";
     }
 
     // Add or update card learning
     activity.cardLearning.push({
-      cardId: new mongoose.Types.ObjectId(cardId),
+      cardId: new mongoose.Types.ObjectId(cardId), // luôn lưu ObjectId
       flashcardId: new mongoose.Types.ObjectId(flashcardId),
       isCorrect: isCorrect || false,
       masteryLevel,

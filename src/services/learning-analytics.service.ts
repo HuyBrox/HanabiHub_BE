@@ -326,7 +326,7 @@ class LearningAnalyticsService {
     const cardFailCount = new Map<string, number>();
     cardLearning.forEach((card) => {
       if (!card.isCorrect) {
-        const key = card.cardId.toString();
+        const key = card.cardId.toString(); // ObjectId luôn dùng toString
         cardFailCount.set(key, (cardFailCount.get(key) || 0) + 1);
       }
     });
@@ -368,6 +368,95 @@ class LearningAnalyticsService {
       averageResponseTime: Math.round(averageResponseTime),
       dailyRetention: Math.round(dailyRetention),
     };
+  }
+
+  /**
+   * 4️⃣ Tính skillMastery (Nghe, Nói, Đọc, Viết) từ taskType
+   */
+  private calculateSkillMastery(activity: IUserActivity) {
+    const { lessonActivities } = activity;
+
+    // Map taskType → skill
+    const skillMap: Record<string, string> = {
+      listening: "listening",
+      speaking: "speaking",
+      reading: "reading",
+      fill_blank: "writing",
+      multiple_choice: "reading", // Giả định đọc hiểu
+      matching: "reading", // Ghép từ cũng liên quan đọc
+    };
+
+    const skills = {
+      listening: {
+        level: 0,
+        tasksCompleted: 0,
+        averageScore: 0,
+        lastPracticed: null as Date | null,
+      },
+      speaking: {
+        level: 0,
+        tasksCompleted: 0,
+        averageScore: 0,
+        lastPracticed: null as Date | null,
+      },
+      reading: {
+        level: 0,
+        tasksCompleted: 0,
+        averageScore: 0,
+        lastPracticed: null as Date | null,
+      },
+      writing: {
+        level: 0,
+        tasksCompleted: 0,
+        averageScore: 0,
+        lastPracticed: null as Date | null,
+      },
+    };
+
+    // Lọc task lessons có taskType
+    const taskLessons = lessonActivities.filter(
+      (l) => l.lessonType === "task" && l.taskType && l.taskData
+    );
+
+    taskLessons.forEach((lesson) => {
+      const skill = skillMap[lesson.taskType];
+      if (!skill || !skills[skill as keyof typeof skills]) return;
+
+      const skillData = skills[skill as keyof typeof skills];
+      skillData.tasksCompleted += 1;
+
+      // Tính điểm
+      const { score, maxScore } = lesson.taskData;
+      const taskScore = maxScore > 0 ? (score / maxScore) * 100 : 0;
+      skillData.averageScore =
+        (skillData.averageScore * (skillData.tasksCompleted - 1) + taskScore) /
+        skillData.tasksCompleted;
+
+      // Cập nhật lastPracticed
+      if (lesson.completedAt) {
+        const completedDate = new Date(lesson.completedAt);
+        if (
+          !skillData.lastPracticed ||
+          completedDate > skillData.lastPracticed
+        ) {
+          skillData.lastPracticed = completedDate;
+        }
+      }
+    });
+
+    // Tính level dựa trên averageScore và tasksCompleted
+    Object.keys(skills).forEach((key) => {
+      const skill = skills[key as keyof typeof skills];
+      const { averageScore, tasksCompleted } = skill;
+
+      // Level = averageScore * (1 + log(tasksCompleted + 1) / 10)
+      // Càng làm nhiều bài, level càng cao
+      const multiplier = 1 + Math.log10(tasksCompleted + 1) / 10;
+      skill.level = Math.min(100, Math.round(averageScore * multiplier));
+      skill.averageScore = Math.round(skill.averageScore);
+    });
+
+    return skills;
   }
 
   /**
@@ -549,6 +638,7 @@ class LearningAnalyticsService {
           courseProgress: this.calculateCourseProgress(activity) as any,
           lessonMastery: this.calculateLessonMastery(activity) as any,
           flashcardMastery: this.calculateFlashcardMastery(activity) as any,
+          skillMastery: this.calculateSkillMastery(activity) as any,
         };
         insights.studyPatterns = this.calculateStudyPatterns(activity) as any;
       } else {
@@ -681,6 +771,32 @@ class LearningAnalyticsService {
         difficultCards: 0,
         averageResponseTime: 0,
         dailyRetention: 0,
+      },
+      skillMastery: {
+        listening: {
+          level: 0,
+          tasksCompleted: 0,
+          averageScore: 0,
+          lastPracticed: null,
+        },
+        speaking: {
+          level: 0,
+          tasksCompleted: 0,
+          averageScore: 0,
+          lastPracticed: null,
+        },
+        reading: {
+          level: 0,
+          tasksCompleted: 0,
+          averageScore: 0,
+          lastPracticed: null,
+        },
+        writing: {
+          level: 0,
+          tasksCompleted: 0,
+          averageScore: 0,
+          lastPracticed: null,
+        },
       },
     };
   }

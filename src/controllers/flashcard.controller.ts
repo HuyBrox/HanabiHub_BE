@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import FlashCard from "../models/flash-card.model";
 import FlashList from "../models/flash-list.model";
 import { ApiResponse, AuthRequest } from "../types";
@@ -593,7 +594,11 @@ export const addCardToFlashCard = async (req: AuthRequest, res: Response) => {
       } as ApiResponse);
     }
 
-    flashCard.cards.push({ vocabulary, meaning });
+    flashCard.cards.push({
+      _id: new mongoose.Types.ObjectId(),
+      vocabulary,
+      meaning,
+    });
     await flashCard.save();
 
     return res.status(200).json({
