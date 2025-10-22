@@ -7,6 +7,9 @@ import messageRoutes from "./message.route";
 import adminRoutes from "./admin.route";
 import userActivityRoutes from "./user-activity.route";
 import courseRoutes from "./course.route";
+import userCourseProgressRoutes from "./user-course-progress.route";
+import learningInsightsRoutes from "./learning-insights.route";
+import callRatingRoutes from "./call-rating.route";
 const router: Router = Router();
 
 // Auth routes
@@ -24,9 +27,18 @@ router.use("/message", messageRoutes);
 router.use("/admin", adminRoutes);
 
 // User Activity tracking routes
-router.use("/activity", userActivityRoutes);
+router.use("/user-activity", userActivityRoutes);
 
 // Course routes
 router.use("/courses", courseRoutes);
+
+// User Course Progress routes
+router.use("/courses", userCourseProgressRoutes);
+
+// Learning Insights routes
+router.use("/learning-insights", learningInsightsRoutes);
+
+// Call Rating routes
+router.use("/call-rating", callRatingRoutes);
 
 export default router;

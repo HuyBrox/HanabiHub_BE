@@ -66,6 +66,10 @@ export const getCourseById = async (req: Request, res: Response) => {
       .populate({
         path: "lessons",
         model: "Lesson",
+        populate: {
+          path: "userCompleted",
+          select: "_id", // Only need userId for checking completion
+        },
       })
       .populate("students", "fullname username avatar");
 
