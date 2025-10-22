@@ -80,3 +80,4 @@ const CallRating: Model<ICallRating> = mongoose.model<ICallRating>(
 
 export default CallRating;
 
+
