@@ -9,7 +9,6 @@ import userActivityRoutes from "./user-activity.route";
 import courseRoutes from "./course.route";
 import userCourseProgressRoutes from "./user-course-progress.route";
 import learningInsightsRoutes from "./learning-insights.route";
-import callRatingRoutes from "./call-rating.route";
 const router: Router = Router();
 
 // Auth routes
@@ -37,8 +36,5 @@ router.use("/courses", userCourseProgressRoutes);
 
 // Learning Insights routes
 router.use("/learning-insights", learningInsightsRoutes);
-
-// Call Rating routes
-router.use("/call-rating", callRatingRoutes);
 
 export default router;

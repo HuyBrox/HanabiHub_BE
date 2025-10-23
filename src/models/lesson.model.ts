@@ -41,6 +41,11 @@ const lessonSchema = new Schema<ILesson>(
       enum: ["upload", "youtube"],
       default: "youtube",
     },
+    duration: {
+      // Video duration in MINUTES (for tracking progress)
+      type: Number,
+      default: 0,
+    },
     userCompleted: [
       //mảng user đã hoàn thành bài học
       {
@@ -58,7 +63,7 @@ const lessonSchema = new Schema<ILesson>(
   { timestamps: true }
 );
 
-lessonSchema.pre("save", function (next) {
+lessonSchema.pre<ILesson>("save", function (next) {
   if (this.type === "task" && !this.jsonTask) {
     return next(new Error("jsonTask is required for task type"));
   }

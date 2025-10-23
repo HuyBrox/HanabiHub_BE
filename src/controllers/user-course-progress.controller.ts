@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { AuthRequest } from "../types/express.types";
 import UserCourseProgress from "../models/user-course-progress.model";
+import UserActivity from "../models/user-activity.model";
 import Course from "../models/course.model";
 import Lesson from "../models/lesson.model";
 import mongoose from "mongoose";
@@ -154,6 +155,7 @@ export const markLessonComplete = async (
 
     // Tính progress percentage
     const course = await Course.findById(courseId).populate("lessons");
+    let courseCompleted = false;
     if (course && course.lessons) {
       const totalLessons = course.lessons.length;
       const completedCount = progress.completedLessons.length;
@@ -164,10 +166,70 @@ export const markLessonComplete = async (
       if (completedCount >= totalLessons) {
         progress.status = "completed";
         progress.completedAt = new Date();
+        courseCompleted = true;
       }
     }
 
     await progress.save();
+
+    // ✅ SYNC: Ensure UserActivity also marks this lesson as completed
+    // This handles cases where markLessonComplete is called without trackTaskActivity/trackVideoActivity
+    let activity = await UserActivity.findOne({ userId });
+    if (activity) {
+      const lessonActivityIndex = activity.lessonActivities.findIndex(
+        (l: any) => l.lessonId.toString() === lessonId.toString()
+      );
+
+      if (lessonActivityIndex !== -1) {
+        // Lesson exists in activity, ensure it's marked complete
+        const lessonActivity = activity.lessonActivities[lessonActivityIndex];
+        if (!lessonActivity.isCompleted) {
+          lessonActivity.isCompleted = true;
+          lessonActivity.completedAt = new Date();
+
+          // Update daily stats to include this completion
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const dayIndex = activity.dailyLearning.findIndex((day: any) => {
+            const dayDate = new Date(day.date);
+            dayDate.setHours(0, 0, 0, 0);
+            return dayDate.getTime() === today.getTime();
+          });
+
+          if (dayIndex !== -1) {
+            activity.dailyLearning[dayIndex].lessonsCompleted =
+              (activity.dailyLearning[dayIndex].lessonsCompleted || 0) + 1;
+          } else {
+            activity.dailyLearning.push({
+              date: today,
+              totalStudyTime: 0,
+              lessonsCompleted: 1,
+              cardsReviewed: 0,
+              cardsLearned: 0,
+              correctRate: 0,
+            });
+          }
+
+          await activity.save();
+        }
+      }
+
+      // ✅ SYNC: If course was completed, update courseActivities
+      if (courseCompleted) {
+        const courseActivityIndex = activity.courseActivities.findIndex(
+          (c: any) => c.courseId.toString() === courseId.toString()
+        );
+
+        if (courseActivityIndex !== -1) {
+          activity.courseActivities[courseActivityIndex].isCompleted = true;
+          activity.courseActivities[courseActivityIndex].completedAt = new Date();
+          await activity.save();
+        }
+      }
+
+      // If lesson doesn't exist in UserActivity, that's OK - it means it was tracked via old flow
+      // We don't create it here to avoid data inconsistency
+    }
 
     // Update Lesson.userCompleted array (for UI display)
     await Lesson.findByIdAndUpdate(

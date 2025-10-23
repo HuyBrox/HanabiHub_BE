@@ -4,6 +4,7 @@ import { Server } from "socket.io";
 import mongoose from "mongoose";
 import User from "../models/user.model";
 import RandomCall from "../models/random-call.model";
+import LearningInsights from "../models/learning-insights.model";
 
 /**
  * CALL MANAGEMENT FEATURES ADDED:
@@ -1196,7 +1197,49 @@ io.on("connection", (socket) => {
         logger.error("Error updating RandomCall document:", error);
       }
 
-      // ✅ KHÔNG CẦN emit showRatingDialog nữa - rating được làm real-time trong call
+      // ✅ Track call activity in UserActivity
+      // Logic: callDuration >= 60s = correct, < 60s = incorrect
+      // Difficulty: <60s=again, 60-180s=hard, 180-300s=good, >300s=easy
+      try {
+        const isCorrect = callDuration >= 60;
+        let difficulty: "again" | "hard" | "good" | "easy";
+
+        if (callDuration < 60) {
+          difficulty = "again";
+        } else if (callDuration < 180) {
+          difficulty = "hard";
+        } else if (callDuration < 300) {
+          difficulty = "good";
+        } else {
+          difficulty = "easy";
+        }
+
+        const UserActivity = (await import("../models/user-activity.model")).default;
+
+        await UserActivity.findOneAndUpdate(
+          { userId: new mongoose.Types.ObjectId(userId) },
+          {
+            $push: {
+              callActivities: {
+                duration: callDuration,
+                isCorrect,
+                difficulty,
+                timestamp: new Date(),
+              },
+            },
+            $inc: {
+              "callStats.totalCalls": 1,
+              "callStats.totalDuration": callDuration,
+              [`callStats.${isCorrect ? 'correctCalls' : 'incorrectCalls'}`]: 1,
+            },
+          },
+          { upsert: true }
+        );
+
+        logger.success(`📊 Tracked call activity for ${userId}: ${callDuration}s (${difficulty}, ${isCorrect ? 'correct' : 'incorrect'})`);
+      } catch (error) {
+        logger.error("Error tracking call activity:", error);
+      }
 
       logger.info(`🎲 Random call ended: ${userId} ↔ ${partnerId} - Duration: ${callDuration}s`);
     } catch (error) {
@@ -1330,9 +1373,11 @@ io.on("connection", (socket) => {
   // Rate partner - Real-time rating during call
   socket.on("ratePartner", async (data) => {
     try {
+      console.log("🎯 [RATING] Event received:", { userId, data });
       const { partnerId, rating } = data;
 
       if (!partnerId || !rating || rating < 1 || rating > 5) {
+        console.log("❌ [RATING] Invalid data:", { partnerId, rating });
         socket.emit("randomCallError", {
           message: "Invalid rating data",
           code: "INVALID_RATING",
@@ -1341,6 +1386,49 @@ io.on("connection", (socket) => {
       }
 
       logger.info(`⭐ User ${userId} rated partner ${partnerId} with ${rating} stars`);
+
+      // Get call info to calculate current duration
+      const callInfo = getUserCallInfo(userId);
+      let callDuration = 0;
+
+      if (callInfo && callInfo.startTime) {
+        callDuration = Math.floor((Date.now() - callInfo.startTime.getTime()) / 1000);
+      }
+
+      // ✅ Adjust skill scores for listening + speaking based on rating
+      // Rating 5 → +5, Rating 4 → +3, Rating 3 → +1, Rating 2 → -2, Rating 1 → -4
+      // Logic: Cộng điểm cho PARTNER (người được rate), không phải người rate
+      const pointsToAdd = rating === 5 ? 5 : rating === 4 ? 3 : rating === 3 ? 1 : rating === 2 ? -2 : -4;
+
+      try {
+        // Update both listening and speaking skills for PARTNER
+        console.log(`💾 [RATING] Updating skills for partner ${partnerId} with ${pointsToAdd} points...`);
+        const updateResult = await LearningInsights.findOneAndUpdate(
+          { userId: new mongoose.Types.ObjectId(partnerId) }, // ✅ Update partnerId, not userId
+          {
+            $inc: {
+              "learningAnalysis.skillMastery.listening.level": pointsToAdd,
+              "learningAnalysis.skillMastery.speaking.level": pointsToAdd,
+            },
+            $set: {
+              "learningAnalysis.skillMastery.listening.lastPracticed": new Date(),
+              "learningAnalysis.skillMastery.speaking.lastPracticed": new Date(),
+            },
+          },
+          { upsert: true, new: true }
+        );
+
+        console.log(`✅ [RATING] Update result:`, {
+          partnerId,
+          pointsAdded: pointsToAdd,
+          newListeningLevel: updateResult?.learningAnalysis?.skillMastery?.listening?.level,
+          newSpeakingLevel: updateResult?.learningAnalysis?.skillMastery?.speaking?.level,
+        });
+
+        logger.success(`📊 Adjusted skill scores for PARTNER ${partnerId}: listening/speaking ${pointsToAdd > 0 ? '+' : ''}${pointsToAdd} points (rated by ${userId})`);
+      } catch (error) {
+        logger.error("Error adjusting skill scores:", error);
+      }
 
       // Get user info for notification
       const raterUser = await User.findById(userId).select("fullname username");
@@ -1356,10 +1444,15 @@ io.on("connection", (socket) => {
         });
       });
 
-      // TODO: Optional - Track rating in user activity for listening/speaking skills
-      // This can be done via API call or direct update to UserActivity
+      // ✅ Emit success to rater (FE sẽ ẩn rating UI)
+      socket.emit("ratingSubmitted", {
+        success: true,
+        rating,
+        skillPointsAdded: pointsToAdd,
+        currentCallDuration: callDuration,
+      });
 
-      logger.success(`⭐ Rating notification sent to ${partnerId}`);
+      logger.success(`⭐ Rating processed: ${userId} → ${partnerId} (${rating}⭐) | Duration: ${callDuration}s | Points: ${pointsToAdd > 0 ? '+' : ''}${pointsToAdd}`);
     } catch (error) {
       logger.error("Error handling rate partner:", error);
       socket.emit("randomCallError", {

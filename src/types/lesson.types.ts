@@ -35,6 +35,7 @@ export interface ILessonBase {
   taskType?: TaskType; // loại task (multiple_choice, fill_blank, listening, matching, speaking, reading)
   videoUrl?: string; // URL video (nếu type là video)
   videoType?: "youtube" | "upload";
+  duration?: number; // Video duration in MINUTES (for progress tracking)
   Comments: Types.ObjectId[]; // ref tới Comment
   userCompleted: Types.ObjectId[]; // ref tới User đã hoàn thành bài học
 }
@@ -54,6 +55,7 @@ export interface CreateVideoLessonRequest {
   content: string;
   videoUrl: string;
   type: "video";
+  duration?: number; // Video duration in minutes
 }
 
 export interface CreateTaskLessonRequest {
@@ -71,6 +73,7 @@ export interface UpdateVideoLessonRequest {
   title?: string;
   content?: string;
   videoUrl?: string;
+  duration?: number; // Video duration in minutes
 }
 
 export interface UpdateTaskLessonRequest {
