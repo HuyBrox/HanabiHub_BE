@@ -136,17 +136,35 @@ import sgMail from "@sendgrid/mail";
 
 dotenv.config();
 
-// Cấu hình SendGrid API Key
-sgMail.setApiKey(process.env.SENDGRID_API_KEY as string);
+// Configure SendGrid only when a valid API key exists
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const hasValidSendgridKey = Boolean(
+  SENDGRID_API_KEY && SENDGRID_API_KEY.startsWith("SG.")
+);
+
+if (hasValidSendgridKey) {
+  sgMail.setApiKey(SENDGRID_API_KEY as string);
+} else {
+  console.warn(
+    "SendGrid API key missing or invalid. Email sending is disabled in this environment."
+  );
+}
 
 // Hàm gửi OTP qua email
 export async function sendOtpEmail(
   email: string,
   otp: string | number
 ): Promise<void> {
+  if (!hasValidSendgridKey) {
+    console.warn(
+      `Skipping OTP email to ${email}: missing/invalid SENDGRID_API_KEY.`
+    );
+    return;
+  }
+
   const msg = {
     to: email,
-    from: `"HanabiHub" <Huybrox.dev@gmail.com>`, // email bạn đã verify trong SendGrid
+    from: `"HanabiHub" <Huybrox.dev@gmail.com>`, // Verified sender in SendGrid
     subject: "Mã OTP xác thực của bạn đây!",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
