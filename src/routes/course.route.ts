@@ -8,40 +8,49 @@ import {
   createLesson,
   updateLesson,
   deleteLesson,
+  getLessonById,
+  upLoadAudioForTask,
 } from "../controllers/course.controller";
 import { isAuth, isAdmin } from "../middleware/isAuth";
 import multer from "../middleware/multer";
 
 const router = express.Router();
 
+//========================Khóa học=========================
 // Lấy tất cả khoá học (Public)
-router.get("/", getAllCourses);
+router.get("/", isAuth, getAllCourses);
 
 // Lấy chi tiết khoá học (Public)
-router.get("/:id", getCourseById);
+router.get("/:id", isAuth, getCourseById);
 
 // Tạo mới khoá học (Admin only)
-router.post("/", isAuth, isAdmin, multer.single("thumbnail"), createCourse);
+router.post("/", isAdmin, multer.single("thumbnail"), createCourse);
 
 // Cập nhật khoá học (Admin only)
-router.put("/:id", isAuth, isAdmin, updateCourse);
+router.put("/:id", isAdmin, multer.single("thumbnail"), updateCourse);
 
 // Xoá khoá học (Admin only)
-router.delete("/:id", isAuth, isAdmin, deleteCourse);
+router.delete("/:id", isAdmin, deleteCourse);
 
-// Thêm bài học mới vào khoá học (Admin only, có thể upload video)
-router.post("/lesson", isAuth, isAdmin, multer.single("video"), createLesson);
-
-// Cập nhật bài học (Admin only, có thể upload video)
-router.put(
-  "/lesson/:id",
-  isAuth,
+//========================Bài học=========================
+// Upload audio cho task (Admin only) - Đặt trước các route có params
+router.post(
+  "/lesson/upload-audio",
   isAdmin,
-  multer.single("video"),
-  updateLesson
+  multer.single("audio"),
+  upLoadAudioForTask
 );
 
-// Xoá bài học (Admin only)
-router.delete("/lesson/:id", isAuth, isAdmin, deleteLesson);
+// Lấy chi tiết bài học (Public)
+router.get("/lesson/:id", isAuth, getLessonById);
 
+// Thêm bài học mới vào khoá học (Admin only, có thể upload video)
+router.post("/lesson", isAdmin, multer.single("video"), createLesson);
+// Cập nhật bài học (Admin only, có thể upload video)
+router.put("/lesson/:id", isAdmin, multer.single("video"), updateLesson);
+
+// Xoá bài học (Admin only)
+router.delete("/lesson/:id", isAdmin, deleteLesson);
+
+//=========================================================
 export default router;

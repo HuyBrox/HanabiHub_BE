@@ -13,12 +13,29 @@ export type TaskType =
   | "speaking" // Phát âm
   | "reading"; // Đọc hiểu
 
+// Enum cho task type (loại bài tập)
+export type TaskType =
+  | "multiple_choice" // Trắc nghiệm
+  | "fill_blank" // Điền từ
+  | "listening" // Nghe hiểu
+  | "matching" // Ghép từ
+  | "speaking" // Phát âm
+  | "reading"; // Đọc hiểu
+
 // Interface cho task JSON structure
 export interface ITaskData {
   lessonId?: string;
   title?: string;
   type: TaskType; // Loại bài tập
+  lessonId?: string;
+  title?: string;
+  type: TaskType; // Loại bài tập
   instructions?: string;
+  audioUrl?: string; // Cho listening
+  items?: any[]; // Flexible cho các dạng bài khác nhau
+  timeLimit?: number; // thời gian làm bài (phút)
+  maxAttempts?: number; // số lần làm tối đa
+  [key: string]: any; // flexible cho các task khác nhau
   audioUrl?: string; // Cho listening
   items?: any[]; // Flexible cho các dạng bài khác nhau
   timeLimit?: number; // thời gian làm bài (phút)
@@ -35,12 +52,25 @@ export interface ILessonBase {
   taskType?: TaskType; // loại task (multiple_choice, fill_blank, listening, matching, speaking, reading)
   videoUrl?: string; // URL video (nếu type là video)
   videoType?: "youtube" | "upload";
+  duration?: number; // Video duration in MINUTES (for progress tracking)
+  Comments: Types.ObjectId[]; // ref tới Comment
+  userCompleted: Types.ObjectId[]; // ref tới User đã hoàn thành bài học
+  title: string; // tiêu đề bài học
+  type: LessonType; // loại bài học
+  content: string; // nội dung bài học
+  jsonTask?: ITaskData; // dữ liệu task (nếu type là task)
+  taskType?: TaskType; // loại task (multiple_choice, fill_blank, listening, matching, speaking, reading)
+  videoUrl?: string; // URL video (nếu type là video)
+  videoType?: "youtube" | "upload";
   Comments: Types.ObjectId[]; // ref tới Comment
   userCompleted: Types.ObjectId[]; // ref tới User đã hoàn thành bài học
 }
 
 // Interface cho Mongoose Document (kế thừa Document)
 export interface ILesson extends ILessonBase, Document {
+  _id: Types.ObjectId; // id mặc định của Mongo
+  taskType?: TaskType; // loại task
+  videoType?: "youtube" | "upload";
   _id: Types.ObjectId; // id mặc định của Mongo
   taskType?: TaskType; // loại task
   videoType?: "youtube" | "upload";
@@ -54,6 +84,7 @@ export interface CreateVideoLessonRequest {
   content: string;
   videoUrl: string;
   type: "video";
+  duration?: number; // Video duration in minutes
 }
 
 export interface CreateTaskLessonRequest {
@@ -66,11 +97,15 @@ export interface CreateTaskLessonRequest {
 export type CreateLessonRequest =
   | CreateVideoLessonRequest
   | CreateTaskLessonRequest;
+export type CreateLessonRequest =
+  | CreateVideoLessonRequest
+  | CreateTaskLessonRequest;
 
 export interface UpdateVideoLessonRequest {
   title?: string;
   content?: string;
   videoUrl?: string;
+  duration?: number; // Video duration in minutes
 }
 
 export interface UpdateTaskLessonRequest {
@@ -82,11 +117,16 @@ export interface UpdateTaskLessonRequest {
 export type UpdateLessonRequest =
   | UpdateVideoLessonRequest
   | UpdateTaskLessonRequest;
+export type UpdateLessonRequest =
+  | UpdateVideoLessonRequest
+  | UpdateTaskLessonRequest;
 
 export interface GetLessonsRequest {
   type?: LessonType; // filter by type
+  type?: LessonType; // filter by type
   limit?: number;
   page?: number;
+  search?: string; // tìm kiếm theo title/content
   search?: string; // tìm kiếm theo title/content
 }
 
@@ -98,8 +138,16 @@ export type LessonPublicInfo = Pick<
   ILesson,
   "title" | "type" | "content" | "createdAt"
 >;
+export type LessonPublicInfo = Pick<
+  ILesson,
+  "title" | "type" | "content" | "createdAt"
+>;
 export type LessonWithCommentsCount = ILesson & { commentsCount: number };
 
+export type LessonCreateInput = Pick<
+  ILessonBase,
+  "title" | "type" | "content"
+> & {
 export type LessonCreateInput = Pick<
   ILessonBase,
   "title" | "type" | "content"

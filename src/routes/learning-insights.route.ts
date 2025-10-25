@@ -7,17 +7,32 @@ import {
   getSkillMastery,
   getStudyPatterns,
   forceUpdateInsights,
-  getStudyRecommendations,
+  getDailyStats,
+  getTimeAnalytics,
+  getWeakAreas,
+  getProgressTimeline,
+  getDetailedPerformance,
 } from "../controllers/learning-insights.controller";
 import { isAuth } from "../middleware/isAuth";
 
 const router = express.Router();
 
-// Lấy tất cả insights của user
+// ========================================
+// CORE INSIGHTS
+// ========================================
+
+// Lấy tất cả insights của user (overview)
 router.get("/my-insights", isAuth, getMyLearningInsights);
 
 // Lấy performance overview
 router.get("/performance", isAuth, getPerformanceOverview);
+
+// Lấy detailed performance với trends và metrics bổ sung
+router.get("/detailed-performance", isAuth, getDetailedPerformance);
+
+// ========================================
+// SPECIALIZED INSIGHTS
+// ========================================
 
 // Lấy course progress
 router.get("/course-progress", isAuth, getCourseProgress);
@@ -31,10 +46,27 @@ router.get("/skill-mastery", isAuth, getSkillMastery);
 // Lấy study patterns
 router.get("/study-patterns", isAuth, getStudyPatterns);
 
+// ========================================
+// ANALYTICS & STATISTICS
+// ========================================
+
+// Lấy daily learning statistics (query: ?days=7 or ?days=30)
+router.get("/daily-stats", isAuth, getDailyStats);
+
+// Lấy time analytics (phân bố thời gian theo nội dung)
+router.get("/time-analytics", isAuth, getTimeAnalytics);
+
+// Lấy weak areas cần cải thiện
+router.get("/weak-areas", isAuth, getWeakAreas);
+
+// Lấy progress timeline (30 ngày)
+router.get("/progress-timeline", isAuth, getProgressTimeline);
+
+// ========================================
+// ACTIONS
+// ========================================
+
 // Force update insights (manual trigger)
 router.post("/update", isAuth, forceUpdateInsights);
-
-// Get AI recommendations (Phase 2)
-router.get("/recommendations", isAuth, getStudyRecommendations);
 
 export default router;

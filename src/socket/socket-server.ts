@@ -3,6 +3,8 @@ import http from "http";
 import { Server } from "socket.io";
 import mongoose from "mongoose";
 import User from "../models/user.model";
+import RandomCall from "../models/random-call.model";
+import LearningInsights from "../models/learning-insights.model";
 
 /**
  * CALL MANAGEMENT FEATURES ADDED:
@@ -77,7 +79,7 @@ const roomParticipants: Record<string, Set<string>> = {};
 const typingTimeouts: Record<string, NodeJS.Timeout> = {};
 
 // Quản lý trạng thái cuộc gọi
-// Key: userId, Value: { callerId, receiverId, callType, startTime }
+// Key: userId, Value: { callerId, receiverId, callType, startTime, randomCallId }
 const activeCall: Record<
   string,
   {
@@ -85,8 +87,26 @@ const activeCall: Record<
     receiverId: string;
     callType: string;
     startTime: Date;
+    randomCallId?: string | undefined; // ID của RandomCall document (nếu là random call)
   } | null
 > = {};
+
+// =============== RANDOM CALL QUEUE MANAGEMENT ===============
+// Quản lý hàng đợi random call
+// Key: socketId, Value: { userId, socketId, filters, waiting, busy }
+interface RandomCallUser {
+  userId: string;
+  socketId: string;
+  filters: {
+    level: "N5" | "N4" | "N3" | "N2" | "N1" | "NO_FILTER";
+    lang: string;
+  };
+  waiting: boolean; // Đang tìm kiếm
+  busy: boolean; // Đang trong cuộc gọi
+  joinedAt: Date;
+}
+
+const randomCallQueue: Record<string, RandomCallUser> = {};
 
 // Statistics để monitor
 const connectionStats = {
@@ -150,18 +170,43 @@ const isUserInCall = (userId: string): boolean => {
 const startCall = (
   callerId: string,
   receiverId: string,
-  callType: string
+  callType: string,
+  randomCallId?: string
 ): void => {
-  const callData = { callerId, receiverId, callType, startTime: new Date() };
+  const callData: {
+    callerId: string;
+    receiverId: string;
+    callType: string;
+    startTime: Date;
+    randomCallId?: string;
+  } = {
+    callerId,
+    receiverId,
+    callType,
+    startTime: new Date()
+  };
+
+  if (randomCallId) {
+    callData.randomCallId = randomCallId;
+  }
+
   activeCall[callerId] = callData;
   activeCall[receiverId] = callData;
-  logger.info(`📞 Bắt đầu cuộc gọi ${callType}: ${callerId} → ${receiverId}`);
+  logger.info(`📞 Bắt đầu cuộc gọi ${callType}: ${callerId} → ${receiverId}${randomCallId ? ' (Random)' : ''}`);
 };
 
 // Kết thúc cuộc gọi
-const endCall = (userId1: string, userId2: string): void => {
+const endCall = async (userId1: string, userId2: string): Promise<void> => {
   if (activeCall[userId1]) {
     logger.info(`📞 Kết thúc cuộc gọi: ${userId1} ↔ ${userId2}`);
+
+    // ✅ KHÔNG CẦN emit showRatingDialog nữa
+    // Rating được làm real-time trong call, không cần popup sau khi kết thúc
+
+    const callInfo = activeCall[userId1];
+    if (callInfo?.randomCallId) {
+      logger.info(`📝 Random call ${callInfo.randomCallId} ended`);
+    }
   }
   activeCall[userId1] = null;
   activeCall[userId2] = null;
@@ -170,6 +215,101 @@ const endCall = (userId1: string, userId2: string): void => {
 // Lấy thông tin cuộc gọi hiện tại của user
 const getUserCallInfo = (userId: string) => {
   return activeCall[userId];
+};
+
+// =============== RANDOM CALL QUEUE FUNCTIONS ===============
+
+// Thêm user vào random call queue
+const addToRandomQueue = (
+  userId: string,
+  socketId: string,
+  filters: { level: string; lang: string }
+): void => {
+  randomCallQueue[socketId] = {
+    userId,
+    socketId,
+    filters: {
+      level: filters.level as "N5" | "N4" | "N3" | "N2" | "N1" | "NO_FILTER",
+      lang: filters.lang,
+    },
+    waiting: false,
+    busy: false,
+    joinedAt: new Date(),
+  };
+  logger.info(
+    `🎲 User ${userId} joined random queue with filters:`,
+    filters
+  );
+};
+
+// Remove user khỏi random call queue
+const removeFromRandomQueue = (socketId: string): void => {
+  const user = randomCallQueue[socketId];
+  if (user) {
+    logger.info(`🎲 User ${user.userId} removed from random queue`);
+    delete randomCallQueue[socketId];
+  }
+};
+
+// Set trạng thái waiting cho user
+const setUserWaiting = (socketId: string, waiting: boolean): void => {
+  if (randomCallQueue[socketId]) {
+    randomCallQueue[socketId].waiting = waiting;
+    logger.info(
+      `🎲 User ${randomCallQueue[socketId].userId} waiting status: ${waiting}`
+    );
+  }
+};
+
+// Set trạng thái busy cho user
+const setUserBusy = (socketId: string, busy: boolean): void => {
+  if (randomCallQueue[socketId]) {
+    randomCallQueue[socketId].busy = busy;
+    logger.info(
+      `🎲 User ${randomCallQueue[socketId].userId} busy status: ${busy}`
+    );
+  }
+};
+
+// Tìm match cho user trong queue
+const findMatch = (
+  currentUser: RandomCallUser
+): RandomCallUser | null => {
+  const { userId, filters, socketId } = currentUser;
+
+  // Tìm trong queue
+  for (const key in randomCallQueue) {
+    const candidate = randomCallQueue[key];
+
+    // Skip chính user đó
+    if (candidate.socketId === socketId) continue;
+
+    // Skip nếu candidate không đang waiting hoặc đang busy
+    if (!candidate.waiting || candidate.busy) continue;
+
+    // Skip nếu candidate đang trong cuộc gọi khác
+    if (isUserInCall(candidate.userId)) continue;
+
+    // Match logic:
+    // 1. Nếu cả 2 đều NO_FILTER → match
+    // 2. Nếu 1 trong 2 là NO_FILTER → match
+    // 3. Nếu cả 2 cùng level → match
+    const currentLevel = filters.level;
+    const candidateLevel = candidate.filters.level;
+
+    if (
+      currentLevel === "NO_FILTER" ||
+      candidateLevel === "NO_FILTER" ||
+      currentLevel === candidateLevel
+    ) {
+      logger.success(
+        `🎲 Match found: ${userId} (${currentLevel}) ↔ ${candidate.userId} (${candidateLevel})`
+      );
+      return candidate;
+    }
+  }
+
+  return null;
 };
 
 // Validate dữ liệu tin nhắn
@@ -245,6 +385,12 @@ const handleUserDisconnection = async (
   userId: string
 ): Promise<void> => {
   try {
+    // ✅ CLEANUP RANDOM CALL QUEUE
+    if (randomCallQueue[socket.id]) {
+      removeFromRandomQueue(socket.id);
+      logger.info(`🎲 Removed ${userId} from random queue on disconnect`);
+    }
+
     // ✅ KẾT THÚC CUỘC GỌI KHI DISCONNECT
     if (isUserInCall(userId)) {
       const callInfo = getUserCallInfo(userId);
@@ -265,6 +411,12 @@ const handleUserDisconnection = async (
               callerId: userId,
               reason: "disconnect",
             });
+
+            // Cleanup random queue của user kia nếu có
+            if (randomCallQueue[socketId]) {
+              setUserBusy(socketId, false);
+              setUserWaiting(socketId, false);
+            }
           });
 
           logger.warning(`📞 Cuộc gọi bị ngắt do ${userId} disconnect`);
@@ -834,6 +986,481 @@ io.on("connection", (socket) => {
   socket.on("sendPeerId", (data) => {
     handleSendPeerId(socket, { ...data, callerId: userId });
   });
+
+  // === RANDOM CALL EVENTS ===
+  // Join random call queue
+  socket.on("joinRandomQueue", (data) => {
+    try {
+      const { filters } = data;
+      if (!filters || !filters.level || !filters.lang) {
+        socket.emit("randomCallError", {
+          message: "Missing filters data",
+          code: "INVALID_FILTERS",
+        });
+        return;
+      }
+
+      addToRandomQueue(userId, socket.id, filters);
+      socket.emit("joinedRandomQueue", {
+        success: true,
+        filters,
+        queueSize: Object.keys(randomCallQueue).length,
+      });
+
+      logger.info(`🎲 User ${userId} joined random queue`);
+    } catch (error) {
+      logger.error("Error joining random queue:", error);
+      socket.emit("randomCallError", {
+        message: "Failed to join queue",
+        code: "JOIN_QUEUE_ERROR",
+      });
+    }
+  });
+
+  // Start searching for random match
+  socket.on("startRandomSearch", async (data) => {
+    try {
+      const currentUser = randomCallQueue[socket.id];
+      if (!currentUser) {
+        socket.emit("randomCallError", {
+          message: "Not in random queue",
+          code: "NOT_IN_QUEUE",
+        });
+        return;
+      }
+
+      // Kiểm tra user có đang trong cuộc gọi không
+      if (isUserInCall(userId)) {
+        socket.emit("randomCallError", {
+          message: "You are already in a call",
+          code: "ALREADY_IN_CALL",
+        });
+        return;
+      }
+
+      // Set waiting = true
+      setUserWaiting(socket.id, true);
+
+      // Tìm match
+      const match = findMatch(currentUser);
+
+      if (match) {
+        // Tìm thấy match!
+        // Set cả 2 user busy
+        setUserBusy(socket.id, true);
+        setUserBusy(match.socketId, true);
+        setUserWaiting(socket.id, false);
+        setUserWaiting(match.socketId, false);
+
+        // Tạo RandomCall document
+        let randomCallId: string | undefined;
+        try {
+          const newRandomCall = await RandomCall.create({
+            user1Id: new mongoose.Types.ObjectId(userId),
+            user2Id: new mongoose.Types.ObjectId(match.userId),
+            user1Level: currentUser.filters.level,
+            user2Level: match.filters.level,
+            matchedLevel: currentUser.filters.level === match.filters.level
+              ? currentUser.filters.level
+              : "NO_FILTER",
+            callType: "video",
+            status: "ongoing",
+          });
+          randomCallId = newRandomCall._id.toString();
+          logger.success(`📝 Created RandomCall document: ${randomCallId}`);
+        } catch (error) {
+          logger.error("Error creating RandomCall document:", error);
+        }
+
+        // Đánh dấu bắt đầu cuộc gọi trong activeCall với randomCallId
+        startCall(userId, match.userId, "video", randomCallId);
+
+        // Emit match_found cho cả 2
+        socket.emit("matchFound", {
+          partnerId: match.userId,
+          partnerLevel: match.filters.level,
+          callType: "video",
+          callId: randomCallId,
+        });
+
+        io.to(match.socketId).emit("matchFound", {
+          partnerId: userId,
+          partnerLevel: currentUser.filters.level,
+          callType: "video",
+          callId: randomCallId,
+        });
+
+        logger.success(
+          `🎲 Match completed: ${userId} ↔ ${match.userId} - Starting call`
+        );
+      } else {
+        // Chưa tìm thấy, giữ waiting = true
+        socket.emit("searchingForMatch", {
+          message: "Searching for a partner...",
+          queueSize: Object.keys(randomCallQueue).filter(
+            (k) => randomCallQueue[k].waiting
+          ).length,
+        });
+        logger.info(`🎲 User ${userId} searching for match...`);
+      }
+    } catch (error) {
+      logger.error("Error starting random search:", error);
+      socket.emit("randomCallError", {
+        message: "Failed to search for match",
+        code: "SEARCH_ERROR",
+      });
+    }
+  });
+
+  // Stop searching
+  socket.on("stopRandomSearch", (data) => {
+    try {
+      setUserWaiting(socket.id, false);
+      socket.emit("searchStopped", { success: true });
+      logger.info(`🎲 User ${userId} stopped searching`);
+    } catch (error) {
+      logger.error("Error stopping search:", error);
+    }
+  });
+
+  // Leave random queue
+  socket.on("leaveRandomQueue", (data) => {
+    try {
+      removeFromRandomQueue(socket.id);
+      socket.emit("leftRandomQueue", { success: true });
+      logger.info(`🎲 User ${userId} left random queue`);
+    } catch (error) {
+      logger.error("Error leaving random queue:", error);
+    }
+  });
+
+  // Send peer ID to partner in random call
+  socket.on("sendRandomCallPeerId", (data) => {
+    try {
+      const { partnerId, peerId } = data;
+      if (!partnerId || !peerId) {
+        socket.emit("randomCallError", {
+          message: "Missing partnerId or peerId",
+          code: "INVALID_PEER_DATA",
+        });
+        return;
+      }
+
+      // Gửi peerId cho partner
+      const partnerSockets = getReceiverSocketIds(partnerId);
+      partnerSockets.forEach((socketId: string) => {
+        io.to(socketId).emit("receiveRandomCallPeerId", {
+          peerId,
+          partnerId: userId,
+        });
+      });
+
+      logger.info(`🎲 Sent peerId ${peerId} from ${userId} to ${partnerId}`);
+    } catch (error) {
+      logger.error("Error sending random call peer ID:", error);
+      socket.emit("randomCallError", {
+        message: "Failed to send peer ID",
+        code: "PEER_ID_ERROR",
+      });
+    }
+  });
+
+  // End random call
+  socket.on("endRandomCall", async (data) => {
+    try {
+      const { partnerId } = data;
+      if (!partnerId) return;
+
+      // Lấy thông tin cuộc gọi
+      const callInfo = getUserCallInfo(userId);
+      if (!callInfo || !callInfo.randomCallId) {
+        logger.warning(`🎲 No random call info found for ${userId}`);
+        return;
+      }
+
+      const callId = callInfo.randomCallId;
+      const callStartTime = callInfo.startTime;
+      const callDuration = Math.floor((Date.now() - callStartTime.getTime()) / 1000);
+
+      // Kết thúc cuộc gọi
+      endCall(userId, partnerId);
+
+      // Update RandomCall document
+      try {
+        await RandomCall.findByIdAndUpdate(callId, {
+          status: "completed",
+          duration: callDuration,
+          endedAt: new Date(),
+        });
+        logger.success(`📝 Updated RandomCall ${callId} - Duration: ${callDuration}s`);
+      } catch (error) {
+        logger.error("Error updating RandomCall document:", error);
+      }
+
+      // ✅ Track call activity in UserActivity
+      // Logic: callDuration >= 60s = correct, < 60s = incorrect
+      // Difficulty: <60s=again, 60-180s=hard, 180-300s=good, >300s=easy
+      try {
+        const isCorrect = callDuration >= 60;
+        let difficulty: "again" | "hard" | "good" | "easy";
+
+        if (callDuration < 60) {
+          difficulty = "again";
+        } else if (callDuration < 180) {
+          difficulty = "hard";
+        } else if (callDuration < 300) {
+          difficulty = "good";
+        } else {
+          difficulty = "easy";
+        }
+
+        const UserActivity = (await import("../models/user-activity.model")).default;
+
+        await UserActivity.findOneAndUpdate(
+          { userId: new mongoose.Types.ObjectId(userId) },
+          {
+            $push: {
+              callActivities: {
+                duration: callDuration,
+                isCorrect,
+                difficulty,
+                timestamp: new Date(),
+              },
+            },
+            $inc: {
+              "callStats.totalCalls": 1,
+              "callStats.totalDuration": callDuration,
+              [`callStats.${isCorrect ? 'correctCalls' : 'incorrectCalls'}`]: 1,
+            },
+          },
+          { upsert: true }
+        );
+
+        logger.success(`📊 Tracked call activity for ${userId}: ${callDuration}s (${difficulty}, ${isCorrect ? 'correct' : 'incorrect'})`);
+      } catch (error) {
+        logger.error("Error tracking call activity:", error);
+      }
+
+      logger.info(`🎲 Random call ended: ${userId} ↔ ${partnerId} - Duration: ${callDuration}s`);
+    } catch (error) {
+      logger.error("Error ending random call:", error);
+    }
+  });
+
+  // Next partner - End current call and find new match
+  socket.on("nextPartner", async (data) => {
+    try {
+      const { currentPartnerId } = data;
+      if (!currentPartnerId) {
+        socket.emit("randomCallError", {
+          message: "Missing currentPartnerId",
+          code: "INVALID_NEXT_PARTNER",
+        });
+        return;
+      }
+
+      const currentUser = randomCallQueue[socket.id];
+      if (!currentUser) {
+        socket.emit("randomCallError", {
+          message: "Not in random queue",
+          code: "NOT_IN_QUEUE",
+        });
+        return;
+      }
+
+      logger.info(`🎲 User ${userId} wants next partner (current: ${currentPartnerId})`);
+
+      // 1. End current call
+      const callInfo = getUserCallInfo(userId);
+      if (callInfo && callInfo.randomCallId) {
+        const callDuration = Math.floor((Date.now() - callInfo.startTime.getTime()) / 1000);
+
+        // Update RandomCall document
+        try {
+          await RandomCall.findByIdAndUpdate(callInfo.randomCallId, {
+            status: "skipped",
+            duration: callDuration,
+            endedAt: new Date(),
+          });
+        } catch (error) {
+          logger.error("Error updating RandomCall on skip:", error);
+        }
+      }
+
+      // End call
+      endCall(userId, currentPartnerId);
+
+      // Notify partner that call ended
+      const partnerSockets = getReceiverSocketIds(currentPartnerId);
+      partnerSockets.forEach((socketId: string) => {
+        io.to(socketId).emit("partnerSkipped", {
+          message: "Partner skipped to next",
+        });
+      });
+
+      // 2. Set user back to waiting
+      setUserBusy(socket.id, false);
+      setUserWaiting(socket.id, true);
+
+      // 3. Try to find new match
+      const match = findMatch(currentUser);
+
+      if (match) {
+        // Found new match!
+        setUserBusy(socket.id, true);
+        setUserBusy(match.socketId, true);
+        setUserWaiting(socket.id, false);
+        setUserWaiting(match.socketId, false);
+
+        // Create RandomCall document
+        let randomCallId: string | undefined;
+        try {
+          const newRandomCall = await RandomCall.create({
+            user1Id: new mongoose.Types.ObjectId(userId),
+            user2Id: new mongoose.Types.ObjectId(match.userId),
+            user1Level: currentUser.filters.level,
+            user2Level: match.filters.level,
+            matchedLevel: currentUser.filters.level === match.filters.level
+              ? currentUser.filters.level
+              : "NO_FILTER",
+            callType: "video",
+            status: "ongoing",
+          });
+          randomCallId = newRandomCall._id.toString();
+          logger.success(`📝 Created new RandomCall document: ${randomCallId}`);
+        } catch (error) {
+          logger.error("Error creating RandomCall document:", error);
+        }
+
+        // Start call
+        startCall(userId, match.userId, "video", randomCallId);
+
+        // Emit match found
+        socket.emit("matchFound", {
+          partnerId: match.userId,
+          partnerLevel: match.filters.level,
+          callType: "video",
+          callId: randomCallId,
+        });
+
+        io.to(match.socketId).emit("matchFound", {
+          partnerId: userId,
+          partnerLevel: currentUser.filters.level,
+          callType: "video",
+          callId: randomCallId,
+        });
+
+        logger.success(`🎲 Next partner match: ${userId} ↔ ${match.userId}`);
+      } else {
+        // No match found, keep searching
+        socket.emit("searchingForMatch", {
+          message: "Searching for next partner...",
+          queueSize: Object.keys(randomCallQueue).filter(
+            (k) => randomCallQueue[k].waiting
+          ).length,
+        });
+        logger.info(`🎲 User ${userId} searching for next partner...`);
+      }
+    } catch (error) {
+      logger.error("Error handling next partner:", error);
+      socket.emit("randomCallError", {
+        message: "Failed to find next partner",
+        code: "NEXT_PARTNER_ERROR",
+      });
+    }
+  });
+
+  // Rate partner - Real-time rating during call
+  socket.on("ratePartner", async (data) => {
+    try {
+      console.log("🎯 [RATING] Event received:", { userId, data });
+      const { partnerId, rating } = data;
+
+      if (!partnerId || !rating || rating < 1 || rating > 5) {
+        console.log("❌ [RATING] Invalid data:", { partnerId, rating });
+        socket.emit("randomCallError", {
+          message: "Invalid rating data",
+          code: "INVALID_RATING",
+        });
+        return;
+      }
+
+      logger.info(`⭐ User ${userId} rated partner ${partnerId} with ${rating} stars`);
+
+      // Get call info to calculate current duration
+      const callInfo = getUserCallInfo(userId);
+      let callDuration = 0;
+
+      if (callInfo && callInfo.startTime) {
+        callDuration = Math.floor((Date.now() - callInfo.startTime.getTime()) / 1000);
+      }
+
+      // ✅ Adjust skill scores for listening + speaking based on rating
+      // Rating 5 → +5, Rating 4 → +3, Rating 3 → +1, Rating 2 → -2, Rating 1 → -4
+      // Logic: Cộng điểm cho PARTNER (người được rate), không phải người rate
+      const pointsToAdd = rating === 5 ? 5 : rating === 4 ? 3 : rating === 3 ? 1 : rating === 2 ? -2 : -4;
+
+      try {
+        // Update both listening and speaking skills for PARTNER
+        console.log(`💾 [RATING] Updating skills for partner ${partnerId} with ${pointsToAdd} points...`);
+        const updateResult = await LearningInsights.findOneAndUpdate(
+          { userId: new mongoose.Types.ObjectId(partnerId) }, // ✅ Update partnerId, not userId
+          {
+            $inc: {
+              "learningAnalysis.skillMastery.listening.level": pointsToAdd,
+              "learningAnalysis.skillMastery.speaking.level": pointsToAdd,
+            },
+            $set: {
+              "learningAnalysis.skillMastery.listening.lastPracticed": new Date(),
+              "learningAnalysis.skillMastery.speaking.lastPracticed": new Date(),
+            },
+          },
+          { upsert: true, new: true }
+        );
+
+        console.log(`✅ [RATING] Update result:`, {
+          partnerId,
+          pointsAdded: pointsToAdd,
+          newListeningLevel: updateResult?.learningAnalysis?.skillMastery?.listening?.level,
+          newSpeakingLevel: updateResult?.learningAnalysis?.skillMastery?.speaking?.level,
+        });
+
+        logger.success(`📊 Adjusted skill scores for PARTNER ${partnerId}: listening/speaking ${pointsToAdd > 0 ? '+' : ''}${pointsToAdd} points (rated by ${userId})`);
+      } catch (error) {
+        logger.error("Error adjusting skill scores:", error);
+      }
+
+      // Get user info for notification
+      const raterUser = await User.findById(userId).select("fullname username");
+      const raterName = raterUser?.fullname || raterUser?.username || "Someone";
+
+      // Emit notification to partner
+      const partnerSockets = getReceiverSocketIds(partnerId);
+      partnerSockets.forEach((socketId: string) => {
+        io.to(socketId).emit("partnerRatedYou", {
+          partnerId: userId,
+          partnerName: raterName,
+          rating,
+        });
+      });
+
+      // ✅ Emit success to rater (FE sẽ ẩn rating UI)
+      socket.emit("ratingSubmitted", {
+        success: true,
+        rating,
+        skillPointsAdded: pointsToAdd,
+        currentCallDuration: callDuration,
+      });
+
+      logger.success(`⭐ Rating processed: ${userId} → ${partnerId} (${rating}⭐) | Duration: ${callDuration}s | Points: ${pointsToAdd > 0 ? '+' : ''}${pointsToAdd}`);
+    } catch (error) {
+      logger.error("Error handling rate partner:", error);
+      socket.emit("randomCallError", {
+        message: "Failed to send rating",
+        code: "RATING_ERROR",
+      });
+    }
+  });
   // Trả lời cuộc gọi (chấp nhận/từ chối)
   socket.on("answerCall", (data) => {
     try {
@@ -870,9 +1497,20 @@ io.on("connection", (socket) => {
       // ✅ KẾT THÚC CUỘC GỌI
       endCall(userId, receiverId);
 
+      // ✅ CLEANUP RANDOM CALL QUEUE
+      if (randomCallQueue[socket.id]) {
+        setUserBusy(socket.id, false);
+        setUserWaiting(socket.id, false);
+      }
+
+      // Tìm socket của receiver và cleanup
       const receiverSockets = getReceiverSocketIds(receiverId);
       receiverSockets.forEach((socketId: string) => {
         io.to(socketId).emit("callEnded", { callerId: userId });
+        if (randomCallQueue[socketId]) {
+          setUserBusy(socketId, false);
+          setUserWaiting(socketId, false);
+        }
       });
 
       logger.info(`📞 Cuộc gọi kết thúc giữa ${userId} và ${receiverId}`);

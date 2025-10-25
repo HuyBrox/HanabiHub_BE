@@ -88,8 +88,8 @@ class LearningAnalyticsService {
       .filter(
         (lesson) =>
           lesson.lessonType === "task" &&
-          lesson.completedAt >= startDate &&
-          lesson.completedAt <= endDate &&
+          new Date(lesson.completedAt) >= startDate &&
+          new Date(lesson.completedAt) <= endDate &&
           lesson.taskData
       )
       .map((lesson) => {
@@ -101,7 +101,8 @@ class LearningAnalyticsService {
     const flashcardScores = flashcardSessions
       .filter(
         (session) =>
-          session.studiedAt >= startDate && session.studiedAt <= endDate
+          new Date(session.studiedAt) >= startDate &&
+          new Date(session.studiedAt) <= endDate
       )
       .map((session) => {
         const { correctAnswers, cardsStudied } = session;

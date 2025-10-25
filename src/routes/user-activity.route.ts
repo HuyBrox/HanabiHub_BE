@@ -5,6 +5,7 @@ import {
   trackTaskActivity,
   trackFlashcardSession,
   trackCardLearning,
+  trackCallActivity,
   trackCourseAccessActivity,
   getActivitySummary,
   clearUserActivity,
@@ -28,6 +29,9 @@ router.post("/track-flashcard-session", isAuth, trackFlashcardSession);
 
 // 🃏 Track individual card learning
 router.post("/track-card", isAuth, trackCardLearning);
+
+// 📞 Track random call activity (listening + speaking)
+router.post("/track-call", isAuth, trackCallActivity);
 
 // 📚 Track course access (enroll/continue/complete)
 router.post("/track-course-access", isAuth, trackCourseAccessActivity);

@@ -1,8 +1,21 @@
 import multer from "multer";
 
 // Cấu hình multer để lưu tệp vào bộ nhớ (RAM) và giới hạn dung lượng file tối đa là 300MB
-const allowedExts = ["mp4", "mov", "avi", "mkv", "jpg", "jpeg", "png", "gif"];
+const allowedExts = [
+  "mp4",
+  "mov",
+  "avi",
+  "mkv",
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "mp3",
+  "wav",
+];
 const allowedMime = [
+  "audio/mpeg",
+  "audio/wav",
   "video/mp4",
   "video/quicktime",
   "video/x-msvideo",
