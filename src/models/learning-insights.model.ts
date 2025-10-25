@@ -101,9 +101,9 @@ const learningInsightsSchema = new mongoose.Schema(
       preferredContent: String, // video, task, flashcard
     },
 
-    // AI Recommendations (chỉ essentials)
-    aiRecommendations: {
-      // Next content to study
+    // Recommendations (tính bằng code, KHÔNG dùng AI)
+    recommendations: {
+      // Next content to study (rule-based)
       nextLessons: [
         {
           lessonId: mongoose.Schema.Types.ObjectId,
@@ -112,11 +112,11 @@ const learningInsightsSchema = new mongoose.Schema(
             type: String,
             enum: ["high", "medium", "low"],
           },
-          reason: String, // "review weak area", "continue course", etc
+          reason: String, // "improve_weak_skill", "continue_course", "review", etc
         },
       ],
 
-      // Flashcards to review
+      // Flashcards to review (rule-based)
       reviewCards: [
         {
           cardId: mongoose.Schema.Types.ObjectId,
@@ -126,7 +126,7 @@ const learningInsightsSchema = new mongoose.Schema(
         },
       ],
 
-      // Study plan
+      // Study plan (rule-based)
       studyPlan: {
         dailyMinutes: Number,
         contentMix: {
@@ -135,6 +135,17 @@ const learningInsightsSchema = new mongoose.Schema(
           practiceTask: Number, // % of time
         },
       },
+    },
+
+    // AI Advice (LỜI KHUYÊN ĐỘNG VIÊN từ AI - CHỈ TEXT)
+    aiAdvice: {
+      message: String, // Lời khuyên động viên từ AI
+      tone: {
+        type: String,
+        enum: ["encouraging", "motivating", "supportive", "constructive"],
+        default: "encouraging",
+      },
+      generatedAt: Date,
     },
 
     // Learning progress predictions

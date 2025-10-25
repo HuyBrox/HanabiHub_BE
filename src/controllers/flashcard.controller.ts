@@ -507,7 +507,10 @@ export const updateFlashCard = async (req: AuthRequest, res: Response) => {
     }
 
     if (name) flashCard.name = name;
-    if (cards) flashCard.cards = cards;
+    if (cards) {
+      // Parse cards nếu nó là string JSON
+      flashCard.cards = typeof cards === 'string' ? JSON.parse(cards) : cards;
+    }
     if (typeof isPublic === "boolean") flashCard.isPublic = isPublic;
     if (thumbnail) flashCard.thumbnail = thumbnail;
     if (description !== undefined) flashCard.description = description;

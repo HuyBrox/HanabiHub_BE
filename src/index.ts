@@ -25,7 +25,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || "http://localhost:3000", // Chỉ định cụ thể origin
+  origin: [
+    process.env.FRONTEND_URL || "http://localhost:3000",
+    "http://localhost:3001", // Add port 3001 for development
+  ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true, // Cho phép gửi cookies

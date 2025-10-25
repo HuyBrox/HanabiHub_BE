@@ -34,6 +34,9 @@ export const getMyLearningInsights = async (
         performance: insights.learningPerformance,
         analysis: insights.learningAnalysis,
         patterns: insights.studyPatterns,
+        recommendations: insights.recommendations,
+        predictions: insights.predictions,
+        aiAdvice: insights.aiAdvice,
         lastUpdated: insights.analysisDate,
       },
     });
@@ -296,9 +299,9 @@ export const getDailyStats = async (req: AuthRequest, res: Response) => {
       )
       .map((day: any) => ({
         date: day.date,
-        studyTime: Math.round((day.totalStudyTime || 0) / 60), // convert to minutes
+        studyTime: Math.round(((day.totalStudyTime || day.timeSpent) || 0) / 60), // convert to minutes, handle both old and new field names
         lessonsCompleted: day.lessonsCompleted || 0,
-        cardsReviewed: day.cardsReviewed || 0,
+        cardsReviewed: (day.cardsReviewed || day.cardsStudied) || 0, // handle both old and new field names
         cardsLearned: day.cardsLearned || 0,
         correctRate: day.correctRate || 0,
         streak: day.streakDays || 0,
@@ -341,20 +344,32 @@ export const getTimeAnalytics = async (req: AuthRequest, res: Response) => {
     }
 
     // Calculate time by content type
-    const videoTime = activity.lessonActivities
-      .filter((l: any) => l.lessonType === "video")
-      .reduce((sum: number, l: any) => sum + (l.timeSpent || 0), 0);
+    const videoLessons = activity.lessonActivities.filter((l: any) => l.lessonType === "video");
+    const taskLessons = activity.lessonActivities.filter((l: any) => l.lessonType === "task");
 
-    const taskTime = activity.lessonActivities
-      .filter((l: any) => l.lessonType === "task")
-      .reduce((sum: number, l: any) => sum + (l.timeSpent || 0), 0);
-
+    const videoTime = videoLessons.reduce((sum: number, l: any) => sum + (l.timeSpent || 0), 0);
+    const taskTime = taskLessons.reduce((sum: number, l: any) => sum + (l.timeSpent || 0), 0);
     const flashcardTime = activity.flashcardSessions.reduce(
       (sum: number, s: any) => sum + (s.sessionDuration || 0),
       0
     );
 
     const totalTime = videoTime + taskTime + flashcardTime;
+
+    // 🔍 DEBUG: Log time calculation details
+    console.log("\n📊 TIME ANALYTICS CALCULATION:");
+    console.log("  User:", userId);
+    console.log("  Video lessons count:", videoLessons.length);
+    console.log("  Task lessons count:", taskLessons.length);
+    console.log("  Flashcard sessions count:", activity.flashcardSessions.length);
+    console.log("  Video time (seconds):", videoTime);
+    console.log("  Task time (seconds):", taskTime);
+    console.log("  Flashcard time (seconds):", flashcardTime);
+    console.log("  Total time (seconds):", totalTime);
+    console.log("  Video time (minutes):", Math.round(videoTime / 60));
+    console.log("  Task time (minutes):", Math.round(taskTime / 60));
+    console.log("  Flashcard time (minutes):", Math.round(flashcardTime / 60));
+    console.log("  Total time (minutes):", Math.round(totalTime / 60));
 
     // Calculate time by skill (from task type)
     const skillTime: Record<string, number> = {
@@ -560,14 +575,14 @@ export const getProgressTimeline = async (req: AuthRequest, res: Response) => {
 
       return {
         date: day.date,
-        studyTime: Math.round((day.totalStudyTime || 0) / 60),
+        studyTime: Math.round(((day.totalStudyTime || day.timeSpent) || 0) / 60), // handle both old and new field names
         score: Math.round(avgScore),
-        activities: day.lessonsCompleted + day.cardsReviewed,
+        activities: day.lessonsCompleted + ((day.cardsReviewed || day.cardsStudied) || 0), // handle both old and new field names
       };
     });
 
     const activeDays = dailyData.filter(
-      (d: any) => d.totalStudyTime > 0
+      (d: any) => ((d.totalStudyTime || d.timeSpent) || 0) > 0 // handle both old and new field names
     ).length;
     const totalScore = timeline.reduce(
       (sum: number, d: any) => sum + d.score,
@@ -642,6 +657,115 @@ export const getDetailedPerformance = async (
           totalSessions,
         },
       },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ========================================
+// RECOMMENDATIONS & PREDICTIONS
+// ========================================
+
+// Lấy recommendations (rule-based)
+export const getRecommendations = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const insights = await LearningInsights.findOne({ userId });
+
+    if (!insights) {
+      return res.status(404).json({
+        message: "No recommendations available",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: insights.recommendations || {
+        nextLessons: [],
+        reviewCards: [],
+        studyPlan: {
+          dailyMinutes: 30,
+          contentMix: {
+            newLessons: 40,
+            reviewCards: 40,
+            practiceTask: 20,
+          },
+        },
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Lấy predictions
+export const getPredictions = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const insights = await LearningInsights.findOne({ userId });
+
+    if (!insights) {
+      return res.status(404).json({
+        message: "No predictions available",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: insights.predictions || {
+        courseCompletionDates: [],
+        skillImprovement: {
+          currentLevel: 0,
+          projectedLevel: 0,
+          timeToNextLevel: 0,
+        },
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Lấy AI advice (text only)
+export const getAIAdvice = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const insights = await LearningInsights.findOne({ userId });
+
+    if (!insights || !insights.aiAdvice) {
+      return res.status(404).json({
+        message: "No AI advice available yet. Keep learning!",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: insights.aiAdvice,
     });
   } catch (error: any) {
     return res.status(500).json({
