@@ -2,6 +2,42 @@ import { Response } from "express";
 import Report from "../models/report.model";
 import { ApiResponse, AuthRequest } from "../types";
 
+// [GET] /api/reports/:id
+export const getReportById = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id;
+    const doc = await Report.findOne({ _id: id, deleted: { $ne: true } })
+      .populate("reporter", "fullname username")
+      .populate("targetUser", "fullname username")
+      .populate("targetPost", "title content")
+      .lean();
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy tố cáo",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Lấy chi tiết tố cáo thành công",
+      data: doc,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("getReportById error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
 // [GET] /api/reports
 export const listReports = async (req: AuthRequest, res: Response) => {
   try {

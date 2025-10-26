@@ -56,6 +56,40 @@ export const createTemplate = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// [GET] /api/templates/:id
+export const getTemplateById = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id;
+    const doc = await Template.findOne({ _id: id, deleted: { $ne: true } })
+      .populate("createdBy", "fullname username")
+      .lean();
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy template",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Lấy chi tiết template thành công",
+      data: doc,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("getTemplateById error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
 // [GET] /api/templates
 export const listTemplates = async (req: AuthRequest, res: Response) => {
   try {
@@ -220,3 +254,98 @@ export const getTemplateStats = async (_req: AuthRequest, res: Response) => {
     } as ApiResponse);
   }
 };
+
+// [GET] /api/templates/export
+export const exportTemplatesCsv = async (_req: AuthRequest, res: Response) => {
+  try {
+    const items = await Template.find({ deleted: { $ne: true } })
+      .sort({ createdAt: -1 })
+      .populate("createdBy", "fullname username")
+      .lean();
+
+    const header = [
+      "id",
+      "name",
+      "type",
+      "title",
+      "usageCount",
+      "createdBy",
+      "createdAt",
+      "updatedAt",
+    ];
+
+    const rows = items.map((t: any) => [
+      t._id,
+      escapeCsv(t.name),
+      t.type,
+      escapeCsv(t.title),
+      t.usageCount || 0,
+      t.createdBy ? `${t.createdBy.fullname} (${t.createdBy.username})` : "System",
+      t.createdAt ? new Date(t.createdAt).toISOString() : "",
+      t.updatedAt ? new Date(t.updatedAt).toISOString() : "",
+    ]);
+
+    const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=templates.csv");
+
+    return res.status(200).send(csv);
+  } catch (error) {
+    console.error("exportTemplatesCsv error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+// [POST] /api/templates/:id/use
+export const useTemplate = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id;
+    const template = await Template.findOne({ _id: id, deleted: { $ne: true } });
+    
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy template",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Tăng usage count
+    await Template.findByIdAndUpdate(id, { $inc: { usageCount: 1 } });
+
+    return res.status(200).json({
+      success: true,
+      message: "Template đã được sử dụng",
+      data: {
+        id: template._id,
+        name: template.name,
+        title: template.title,
+        content: template.content,
+        type: template.type,
+      },
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("useTemplate error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+function escapeCsv(value: any): string {
+  if (value === null || value === undefined) return "";
+  const str = String(value).replace(/"/g, '""');
+  if (str.search(/[",\n]/g) >= 0) return `"${str}"`;
+  return str;
+}

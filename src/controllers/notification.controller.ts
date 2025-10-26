@@ -196,3 +196,184 @@ export const getNotificationStats = async (_req: AuthRequest, res: Response) => 
     } as ApiResponse);
   }
 };
+
+// [GET] /api/notifications/export
+export const exportNotificationsCsv = async (_req: AuthRequest, res: Response) => {
+  try {
+    const items = await Notification.find({ deleted: { $ne: true } })
+      .sort({ createdAt: -1 })
+      .populate("sender", "fullname username")
+      .lean();
+
+    const header = [
+      "id",
+      "type",
+      "title",
+      "content",
+      "sender",
+      "receiversCount",
+      "deliveredCount",
+      "createdAt",
+      "updatedAt",
+    ];
+
+    const rows = items.map((n: any) => [
+      n._id,
+      n.type,
+      escapeCsv(n.title),
+      escapeCsv(n.content),
+      n.sender ? `${n.sender.fullname} (${n.sender.username})` : "System",
+      Array.isArray(n.receivers) ? n.receivers.length : 0,
+      n.deliveredCount || 0,
+      n.createdAt ? new Date(n.createdAt).toISOString() : "",
+      n.updatedAt ? new Date(n.updatedAt).toISOString() : "",
+    ]);
+
+    const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=notifications.csv");
+
+    return res.status(200).send(csv);
+  } catch (error) {
+    console.error("exportNotificationsCsv error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+// [GET] /api/notifications/my - Lấy thông báo của user hiện tại
+export const getMyNotifications = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    const page = parseInt((req.query.page as string) || "1", 10);
+    const limit = Math.min(parseInt((req.query.limit as string) || "20", 10), 100);
+    const skip = (page - 1) * limit;
+    const unreadOnly = req.query.unreadOnly === "true";
+
+    // Query: System notifications OR personal notifications for this user
+    const query: any = {
+      deleted: { $ne: true },
+      $or: [
+        { isSystem: true }, // All system notifications
+        { receivers: userId }, // Personal notifications for this user
+      ],
+    };
+
+    // Filter unread only
+    if (unreadOnly) {
+      query.readBy = { $ne: userId };
+    }
+
+    const [items, total] = await Promise.all([
+      Notification.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select("_id type title content isSystem createdAt readBy")
+        .lean(),
+      Notification.countDocuments(query),
+    ]);
+
+    // Add isRead field for each notification
+    const notifications = items.map((n: any) => ({
+      ...n,
+      isRead: n.readBy && n.readBy.some((id: any) => id.toString() === userId),
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: "Lấy thông báo thành công",
+      data: { items: notifications, total, page, limit },
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("getMyNotifications error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+// [PUT] /api/notifications/:id/read - Đánh dấu thông báo đã đọc
+export const markNotificationAsRead = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    const notification = await Notification.findOne({
+      _id: id,
+      deleted: { $ne: true },
+    });
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy thông báo",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Check if already read
+    if (notification.readBy.some((uid: any) => uid.toString() === userId)) {
+      return res.status(200).json({
+        success: true,
+        message: "Thông báo đã được đánh dấu đã đọc trước đó",
+        data: notification,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Add to readBy array
+    notification.readBy.push(userId as any);
+    await notification.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Đánh dấu đã đọc thành công",
+      data: notification,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("markNotificationAsRead error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+function escapeCsv(value: any): string {
+  if (value === null || value === undefined) return "";
+  const str = String(value).replace(/"/g, '""');
+  if (str.search(/[",\n]/g) >= 0) return `"${str}"`;
+  return str;
+}

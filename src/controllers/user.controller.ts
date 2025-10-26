@@ -318,3 +318,80 @@ export const changeEmail = async (req: AuthRequest, res: Response) => {
     } as ApiResponse);
   }
 };
+
+// [GET] /api/users/search - Tìm kiếm users cho admin (gửi thông báo)
+export const searchUsers = async (req: AuthRequest, res: Response) => {
+  try {
+    const page = parseInt((req.query.page as string) || "1", 10);
+    const limit = Math.min(parseInt((req.query.limit as string) || "20", 10), 100);
+    const skip = (page - 1) * limit;
+    const search = (req.query.search as string) || "";
+    const role = (req.query.role as string) || undefined;
+
+    const query: any = { deleted: { $ne: true } };
+    
+    if (search) {
+      query.$or = [
+        { fullname: { $regex: search, $options: "i" } },
+        { username: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+      ];
+    }
+    
+    if (role && ["admin", "premium", "basic"].includes(role)) {
+      query.role = role;
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(query)
+        .select("_id fullname username email role avatar")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(query),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "Tìm kiếm người dùng thành công",
+      data: { users, total, page, limit },
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Error searching users:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+// [GET] /api/users/stats - Thống kê users cho admin
+export const getUserStats = async (_req: AuthRequest, res: Response) => {
+  try {
+    const [total, admin, premium, basic] = await Promise.all([
+      User.countDocuments({ deleted: { $ne: true } }),
+      User.countDocuments({ role: "admin", deleted: { $ne: true } }),
+      User.countDocuments({ role: "premium", deleted: { $ne: true } }),
+      User.countDocuments({ role: "basic", deleted: { $ne: true } }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "Thống kê người dùng",
+      data: { total, admin, premium, basic },
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Error getting user stats:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};

@@ -9,11 +9,21 @@ export const isAuth = (
   next: NextFunction
 ): void => {
   try {
-    // Đọc token từ cookie thay vì Authorization header
-    const token = req.cookies.token;
+    // Đọc token từ cookie hoặc Authorization header
+    let token = req.cookies.token;
+    
+    // Nếu không có token trong cookie, thử đọc từ Authorization header
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+    }
+    
     console.log("=== isAuth middleware ===");
-    console.log("Token from cookie:", token ? "Token found" : "No token");
-    console.log("All cookies:", req.cookies);
+    console.log("Token from cookie:", req.cookies.token ? "Token found" : "No token");
+    console.log("Token from header:", req.headers.authorization ? "Token found" : "No token");
+    console.log("Final token:", token ? "Token found" : "No token");
 
     if (!token) {
       res.status(401).json({
@@ -56,7 +66,16 @@ export const isAdmin = (
   try {
     // Nếu chưa có req.user, tự verify token
     if (!req.user) {
-      const token = req.cookies.token;
+      // Đọc token từ cookie hoặc Authorization header
+      let token = req.cookies.token;
+      
+      // Nếu không có token trong cookie, thử đọc từ Authorization header
+      if (!token && req.headers.authorization) {
+        const authHeader = req.headers.authorization;
+        if (authHeader.startsWith('Bearer ')) {
+          token = authHeader.substring(7);
+        }
+      }
 
       if (!token) {
         res.status(401).json({

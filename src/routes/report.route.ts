@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { isAdmin } from "../middleware/isAuth";
 import {
+  getReportById,
   listReports,
   approveReport,
   rejectReport,
@@ -10,10 +11,14 @@ import {
 
 const router = Router();
 
-router.get("/reports", isAdmin, listReports);
-router.put("/reports/:id/approve", isAdmin, approveReport);
-router.put("/reports/:id/reject", isAdmin, rejectReport);
+// Stats and export routes MUST come before :id routes
 router.get("/reports/stats", isAdmin, getReportStats);
 router.get("/reports/export", isAdmin, exportReportsCsv);
+
+// CRUD routes
+router.get("/reports", isAdmin, listReports);
+router.get("/reports/:id", isAdmin, getReportById);
+router.put("/reports/:id/approve", isAdmin, approveReport);
+router.put("/reports/:id/reject", isAdmin, rejectReport);
 
 export default router;

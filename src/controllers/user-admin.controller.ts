@@ -13,7 +13,7 @@ export const searchUsers = async (req: AuthRequest, res: Response) => {
     const queryText = (req.query.query as string) || "";
     const role = (req.query.role as string) || undefined; // admin, premium, basic
 
-    const query: any = { deleted: { $ne: true } };
+      const query: any = { deleted: { $ne: true } };
 
     if (queryText) {
       query.$or = [

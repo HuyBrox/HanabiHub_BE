@@ -26,19 +26,14 @@ app.use(express.urlencoded({ extended: true }));
 
 const corsOptions = {
   origin: process.env.FRONTEND_URL || "http://localhost:3000", // Chỉ định cụ thể origin
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+  exposedHeaders: ["Set-Cookie"],
   credentials: true, // Cho phép gửi cookies
 };
 app.use(cors(corsOptions));
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "default_session_secret",
-    resave: false,
-    saveUninitialized: true,
-  })
-);
+// Remove session middleware as we're using JWT
 
 // Tích hợp PeerServer vào HTTP server
 const peerServer = ExpressPeerServer(server, {

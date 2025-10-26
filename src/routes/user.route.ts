@@ -7,8 +7,10 @@ import {
   changePassword,
   deleteUser,
   changeEmail,
+  searchUsers,
+  getUserStats,
 } from "../controllers/user.controller";
-import { isAuth } from "../middleware/isAuth";
+import { isAuth, isAdmin } from "../middleware/isAuth";
 import { validate, updateUserSchema } from "../validators";
 import upload from "../middleware/multer";
 const router = Router();
@@ -35,5 +37,11 @@ router.patch("/change-password", isAuth, changePassword);
 router.delete("/", isAuth, deleteUser);
 // Thay đổi email
 router.patch("/change-email", isAuth, changeEmail);
+
+// Admin routes for user management
+// Tìm kiếm users cho admin (gửi thông báo)
+router.get("/search", isAdmin, searchUsers);
+// Thống kê users cho admin
+router.get("/stats", isAdmin, getUserStats);
 
 export default router;

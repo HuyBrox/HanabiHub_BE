@@ -15,7 +15,8 @@
     "clean": "rimraf dist",
     "prebuild": "npm run clean",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "seed:templates": "ts-node src/seeds/templates.seed.ts"
   },
   "keywords": [
     "express",
