@@ -45,13 +45,16 @@ export const loginSchema = z.object({
 export const updateUserSchema = z.object({
   body: z.object({
     username: z.string().min(3).max(100).optional(),
-    avatar: z.string().url().optional(),
+    // avatar có thể là URL string hoặc file upload (sẽ ở req.file)
+    // Nếu là file upload thì không validate ở đây, chỉ validate khi là string
+    avatar: z.union([z.string().url(), z.string()]).optional(),
     fullname: z.string().optional(),
     gender: z.enum(["male", "female", "other"]).optional(),
     bio: z.string().optional(),
     phone: z.string().optional(),
     address: z.string().optional(),
     level: z.enum(["N5", "N4", "N3", "N2", "N1"]).optional(),
+    isPrivate: z.boolean().optional(),
   }),
 });
 
@@ -59,8 +62,21 @@ export const updateUserSchema = z.object({
 export const validate = (schema: z.ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
+      // Nếu có file upload (multer), bỏ qua validation avatar trong body
+      const bodyToValidate = { ...req.body };
+      if ((req as any).file && bodyToValidate.avatar) {
+        delete bodyToValidate.avatar;
+      }
+
+      // Loại bỏ các field empty string trước khi validate (vì chúng là optional)
+      Object.keys(bodyToValidate).forEach((key) => {
+        if (bodyToValidate[key] === "" || bodyToValidate[key] === null) {
+          delete bodyToValidate[key];
+        }
+      });
+
       schema.parse({
-        body: req.body,
+        body: bodyToValidate,
         params: req.params,
         query: req.query,
       });

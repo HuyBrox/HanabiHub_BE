@@ -7,6 +7,16 @@ import {
   changePassword,
   deleteUser,
   changeEmail,
+  getUserStats,
+  getUserCourses,
+  getWeeklyProgress,
+  getUserAchievements,
+  getUserInsights,
+  searchUsers,
+  followUser,
+  unfollowUser,
+  getFriends,
+  getMyFriends,
 } from "../controllers/user.controller";
 import { isAuth } from "../middleware/isAuth";
 import { validate, updateUserSchema } from "../validators";
@@ -17,10 +27,29 @@ const router = Router();
 
 // Lấy thông tin user hiện tại
 router.get("/profile", isAuth, getCurrentUser);
-// Lấy thông tin user theo id
+
+// Profile stats endpoints - PHẢI đặt TRƯỚC route /profile/:id để tránh conflict
+router.get("/profile/stats", isAuth, getUserStats);
+router.get("/profile/courses", isAuth, getUserCourses);
+router.get("/profile/weekly-progress", isAuth, getWeeklyProgress);
+router.get("/profile/achievements", isAuth, getUserAchievements);
+router.get("/profile/insights", isAuth, getUserInsights);
+
+// Lấy thông tin user theo id - PHẢI đặt SAU các route cụ thể
 router.get("/profile/:id", isAuth, getUser);
+
+// Follow/Unfollow user
+router.post("/:id/follow", isAuth, followUser);
+router.delete("/:id/follow", isAuth, unfollowUser);
+
+// Lấy danh sách bạn bè
+router.get("/friends/me", isAuth, getMyFriends); // Phải đặt TRƯỚC /friends/:id
+router.get("/friends/:id", isAuth, getFriends);
+
 // Lấy danh sách user (phân trang)
 router.get("/getAll", isAuth, getUsers);
+// Tìm kiếm user
+router.get("/search", isAuth, searchUsers);
 // Cập nhật thông tin user hiện tại
 router.patch(
   "/change-profile",

@@ -29,7 +29,7 @@ const corsOptions = {
     process.env.FRONTEND_URL || "http://localhost:3000",
     "http://localhost:3001", // Add port 3001 for development
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true, // Cho phép gửi cookies
 };

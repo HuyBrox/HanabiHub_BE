@@ -20,7 +20,8 @@ export interface IUser extends Document {
   username: string;
   email: string;
   gender: string;
-  password: string;
+  password?: string;
+  googleId?: string;
   avatar?: string;
   bio?: string;
   phone?: string;
@@ -34,6 +35,7 @@ export interface IUser extends Document {
   isActive: boolean;
   isAdmin: boolean;
   isOnline: boolean;
+  isPrivate: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
