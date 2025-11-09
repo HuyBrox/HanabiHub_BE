@@ -674,28 +674,28 @@ export const googleLogin = async (req: Request, res: Response) => {
         if (picture) user.avatar = picture;
         await user.save();
       } else {
-      // Tạo user mới
-      // Tạo username từ email (lấy phần trước @)
-      const baseUsername = email.split("@")[0];
-      let username = baseUsername;
-      let counter = 1;
+        // Tạo user mới
+        // Tạo username từ email (lấy phần trước @)
+        const baseUsername = email.split("@")[0];
+        let username = baseUsername;
+        let counter = 1;
 
-      // Đảm bảo username unique
-      while (await User.findOne({ username })) {
-        username = `${baseUsername}${counter}`;
-        counter++;
-      }
+        // Đảm bảo username unique
+        while (await User.findOne({ username })) {
+          username = `${baseUsername}${counter}`;
+          counter++;
+        }
 
-      user = new User({
-        email,
-        googleId,
-        fullname: name || email.split("@")[0],
-        username,
-        avatar: picture,
-        password: undefined, // Không có password cho Google user
-      });
+        user = new User({
+          email,
+          googleId,
+          fullname: name || email.split("@")[0],
+          username,
+          avatar: picture,
+          password: undefined, // Không có password cho Google user
+        });
 
-      await user.save();
+        await user.save();
       }
     }
 
