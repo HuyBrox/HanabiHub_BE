@@ -28,7 +28,7 @@ const allowedMime = [
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 300 * 1024 * 1024 }, // Giới hạn dung lượng file tối đa là 300MB
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const ext = file.originalname.split(".").pop()?.toLowerCase() || "";
     const isMime = allowedMime.includes(file.mimetype);
     const isExt = allowedExts.includes(ext);
