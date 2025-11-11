@@ -7,19 +7,18 @@ import {
   deletePost,
   toggleLikePost
 } from '../controllers/post.controller';
-// import { isAuth } from '../middleware/isAuth'; // Uncomment khi có middleware
+import { isAuth } from '../middleware/isAuth';
+import { rateLimitCreatePost, rateLimitLike } from '../middleware/rateLimiter';
+import upload from '../middleware/multer';
 
 const router = Router();
 
-// Public routes
-router.get('/', getAllPosts);           // GET /api/posts
-router.get('/:id', getPost);            // GET /api/posts/:id
+router.get('/', getAllPosts);
+router.get('/:id', getPost);
 
-// Protected routes (cần authentication)
-// Uncomment các dòng middleware khi đã có isAuth
-router.post('/', /* isAuth, */ createPost);         // POST /api/posts
-router.put('/:id', /* isAuth, */ updatePost);       // PUT /api/posts/:id
-router.delete('/:id', /* isAuth, */ deletePost);    // DELETE /api/posts/:id
-router.post('/:id/like', /* isAuth, */ toggleLikePost); // POST /api/posts/:id/like
+router.post('/', isAuth, rateLimitCreatePost, upload.array('images', 10), createPost);
+router.put('/:id', isAuth, updatePost);
+router.delete('/:id', isAuth, deletePost);
+router.post('/:id/like', isAuth, rateLimitLike, toggleLikePost);
 
 export default router;
