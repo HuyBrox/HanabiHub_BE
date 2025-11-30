@@ -1,3 +1,4 @@
+// src/routes/index.ts
 import { Router } from "express";
 import userRoutes from "./user.route";
 import authRoutes from "./auth.route";
@@ -9,20 +10,28 @@ import userActivityRoutes from "./user-activity.route";
 import courseRoutes from "./course.route";
 import userCourseProgressRoutes from "./user-course-progress.route";
 import learningInsightsRoutes from "./learning-insights.route";
+
+// ✅ import router users.admin (đúng path, KHÔNG lồng thêm /routes)
+import usersAdminRoute from "./usersAdmin.route";
+
 const router: Router = Router();
 
 // Auth routes
 router.use("", authRoutes);
+
 // User routes
 router.use("/user", userRoutes);
+
 // Post routes
 router.use("/posts", postRoutes);
+
 // Flashcard routes
 router.use("/flashcards", flashcardRoutes);
+
 // Message routes
 router.use("/message", messageRoutes);
 
-// Admin routes
+// Admin routes cũ
 router.use("/admin", adminRoutes);
 
 // User Activity tracking routes
@@ -36,5 +45,9 @@ router.use("/courses", userCourseProgressRoutes);
 
 // Learning Insights routes
 router.use("/learning-insights", learningInsightsRoutes);
+
+// ✅ NEW: nhóm route quản lý user cho Admin
+// FE đang gọi: /api/v1/users.admin/list → đúng path này luôn
+router.use("/users.admin", usersAdminRoute);
 
 export default router;
