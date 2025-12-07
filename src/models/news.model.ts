@@ -6,6 +6,7 @@ export interface INews extends Document {
   _id: Types.ObjectId;
   title: string;
   content: string; // HTML or markdown
+  image?: string; // Cloudinary URL or Base64
   author?: Types.ObjectId;
   status: NewsStatus;
   views: number;
@@ -20,6 +21,7 @@ const NewsSchema = new Schema<INews>(
   {
     title: { type: String, required: true, trim: true },
     content: { type: String, required: true },
+    image: { type: String, default: undefined }, // Cloudinary URL or Base64
     author: { type: Schema.Types.ObjectId, ref: "User" },
     status: { type: String, enum: ["draft", "published"], default: "draft" },
     views: { type: Number, default: 0 },

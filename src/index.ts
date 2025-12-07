@@ -21,14 +21,40 @@ const PORT: number = parseInt(process.env.PORT || "8080", 10);
 app.use(helmet());
 app.use(morgan("combined"));
 app.use(cookieParser()); // Thêm cookie parser middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Accept larger payloads (images in base64 may be included in requests)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || "http://localhost:3000", // Chỉ định cụ thể origin
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
-  exposedHeaders: ["Set-Cookie"],
+  origin: (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void
+  ) => {
+    // Cho phép requests không có origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      process.env.FRONTEND_URL || "http://localhost:3000",
+      "http://localhost:3001",
+      "https://hanabi-hub.vercel.app",
+    ];
+
+    // Kiểm tra origin có trong danh sách cho phép
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Cho phép Vercel preview deployments (pattern matching)
+    if (origin.match(/^https:\/\/hanabi-hub.*\.vercel\.app$/)) {
+      return callback(null, true);
+    }
+
+    // Từ chối origin không được phép
+    callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cookie"], // Added "Cookie"
+  exposedHeaders: ["Set-Cookie"], // Added this line
   credentials: true, // Cho phép gửi cookies
 };
 app.use(cors(corsOptions));
@@ -130,5 +156,3 @@ const shutdown = async (signal: string) => {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
-
-

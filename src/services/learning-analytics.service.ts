@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 import UserActivity from "../models/user-activity.model";
 import LearningInsights from "../models/learning-insights.model";
+import Lesson from "../models/lesson.model";
+import Course from "../models/course.model";
+import { queueAIRecommendation } from "../middleware/ai-recommendation-queue";
 
 interface IUserActivity {
   userId: mongoose.Types.ObjectId;
@@ -72,9 +75,15 @@ class LearningAnalyticsService {
       oneWeekAgo
     );
 
-    if (lastWeekScore === 0) return 0;
+    // Nếu không có dữ liệu tuần trước
+    if (lastWeekScore === 0) {
+      // Nếu tuần này có tiến bộ, return 100% (new progress)
+      return thisWeekScore > 0 ? 100 : 0;
+    }
 
-    return ((thisWeekScore - lastWeekScore) / lastWeekScore) * 100;
+    // Tính % thay đổi, giới hạn trong [-100, 100]
+    const progress = ((thisWeekScore - lastWeekScore) / lastWeekScore) * 100;
+    return Math.max(-100, Math.min(100, progress));
   }
 
   private calculateAverageScore(
@@ -246,14 +255,12 @@ class LearningAnalyticsService {
           100
         : 0;
 
+    // Average watch time in minutes (not percentage)
     const averageWatchTime =
       videoLessons.length > 0
         ? videoLessons.reduce((sum, v) => {
-            if (v.videoData?.totalDuration > 0) {
-              return (
-                sum +
-                (v.videoData.watchedDuration / v.videoData.totalDuration) * 100
-              );
+            if (v.videoData?.watchedDuration) {
+              return sum + v.videoData.watchedDuration / 60; // convert seconds to minutes
             }
             return sum;
           }, 0) / videoLessons.length
@@ -630,7 +637,7 @@ class LearningAnalyticsService {
         insights = new LearningInsights({ userId });
       }
 
-      // Tính toán các phần (80% bằng code)
+      // Tính toán các phần (100% bằng code - KHÔNG dùng AI)
       if (hasEnoughData) {
         insights.learningPerformance = this.calculatePerformance(
           activity
@@ -642,11 +649,27 @@ class LearningAnalyticsService {
           skillMastery: this.calculateSkillMastery(activity) as any,
         };
         insights.studyPatterns = this.calculateStudyPatterns(activity) as any;
+
+        // 📊 TÍNH RECOMMENDATIONS (rule-based, không dùng AI)
+        const recommendations = await this.calculateRecommendations(
+          userId,
+          activity,
+          insights
+        );
+        insights.recommendations = recommendations as any;
+
+        // 📈 TÍNH PREDICTIONS (rule-based)
+        insights.predictions = this.calculatePredictions(
+          activity,
+          insights
+        ) as any;
       } else {
         // Chưa đủ dữ liệu, khởi tạo với giá trị mặc định
         insights.learningPerformance = this.getDefaultPerformance() as any;
         insights.learningAnalysis = this.getDefaultAnalysis() as any;
         insights.studyPatterns = this.getDefaultStudyPatterns() as any;
+        insights.recommendations = this.getDefaultRecommendations() as any;
+        insights.predictions = this.getDefaultPredictions() as any;
       }
 
       // Đếm số data points để biết độ tin cậy
@@ -664,6 +687,25 @@ class LearningAnalyticsService {
 
       // Lưu vào database
       await insights.save();
+
+      // 🤖 Queue AI Advice (async, không block) - CHỈ LỜI KHUYÊN
+      // Chỉ queue nếu user có đủ data và chưa có AI advice hoặc đã cũ (> 1 ngày)
+      const needsAdvice =
+        hasEnoughData &&
+        dataPoints >= 10 &&
+        (!insights.aiAdvice ||
+          !insights.aiAdvice.generatedAt ||
+          new Date().getTime() - new Date(insights.aiAdvice.generatedAt).getTime() >
+            24 * 60 * 60 * 1000);
+
+      if (needsAdvice) {
+        console.log(
+          `🤖 Queuing AI advice for user ${userId} (dataPoints: ${dataPoints})`
+        );
+        queueAIRecommendation(userId.toString()).catch((err) => {
+          console.error("Failed to queue AI advice:", err);
+        });
+      }
 
       return insights;
     } catch (error: any) {
@@ -813,6 +855,396 @@ class LearningAnalyticsService {
       currentStreak: 0,
       longestStreak: 0,
       preferredContent: "video",
+    };
+  }
+
+  /**
+   * Default recommendations
+   */
+  private getDefaultRecommendations() {
+    return {
+      nextLessons: [],
+      reviewCards: [],
+      studyPlan: {
+        dailyMinutes: 30,
+        contentMix: {
+          newLessons: 40,
+          reviewCards: 40,
+          practiceTask: 20,
+        },
+      },
+    };
+  }
+
+  /**
+   * Default predictions
+   */
+  private getDefaultPredictions() {
+    return {
+      courseCompletionDates: [],
+      skillImprovement: {
+        currentLevel: 0,
+        projectedLevel: 0,
+        timeToNextLevel: 0,
+      },
+    };
+  }
+
+  /**
+   * 📊 TÍNH RECOMMENDATIONS (rule-based, không dùng AI)
+   */
+  private async calculateRecommendations(
+    userId: string | mongoose.Types.ObjectId,
+    activity: IUserActivity,
+    insights: any
+  ) {
+    // 1. Next Lessons recommendation
+    const nextLessons = await this.recommendNextLessons(userId, insights);
+
+    // 2. Review Cards recommendation
+    const reviewCards = await this.recommendReviewCards(userId, activity);
+
+    // 3. Study Plan recommendation
+    const studyPlan = this.recommendStudyPlan(insights);
+
+    return {
+      nextLessons,
+      reviewCards,
+      studyPlan,
+    };
+  }
+
+  /**
+   * Recommend next lessons based on skill levels
+   */
+  private async recommendNextLessons(
+    userId: string | mongoose.Types.ObjectId,
+    insights: any
+  ) {
+    try {
+      const skillMastery = insights.learningAnalysis?.skillMastery || {};
+
+      // Tìm skill yếu nhất
+      const skills = ["listening", "speaking", "reading", "writing"];
+      let weakestSkill = "reading";
+      let lowestLevel = 100;
+
+      skills.forEach((skill) => {
+        const level = skillMastery[skill]?.level || 0;
+        if (level < lowestLevel) {
+          lowestLevel = level;
+          weakestSkill = skill;
+        }
+      });
+
+      // Get user's activity to find completed lessons
+      const userActivity = await UserActivity.findOne({ userId });
+      const completedLessonIds =
+        userActivity?.lessonActivities
+          ?.filter((la: any) => la.isCompleted)
+          .map((la: any) => la.lessonId.toString()) || [];
+
+      // Map skill to taskType
+      const skillToTaskType: Record<string, string[]> = {
+        listening: ["listening"],
+        speaking: ["speaking"],
+        reading: ["reading", "multiple_choice", "matching"],
+        writing: ["fill_blank"],
+      };
+
+      // Find lessons for weakest skill (priority: high)
+      const weakSkillLessons = await Lesson.find({
+        taskType: { $in: skillToTaskType[weakestSkill] },
+        _id: { $nin: completedLessonIds.map((id: string) => new mongoose.Types.ObjectId(id)) },
+      })
+        .select("_id title taskType")
+        .limit(2)
+        .lean();
+
+      const recommendations: any[] = [];
+
+      // Add weak skill lessons (high priority)
+      // Query Course để tìm courseId cho từng lesson
+      for (const lesson of weakSkillLessons) {
+        const course = await Course.findOne({ lessons: lesson._id })
+          .select("_id")
+          .lean();
+
+        recommendations.push({
+          lessonId: lesson._id,
+          courseId: course?._id || null,
+          priority: "high",
+          reason: `improve_weak_skill_${weakestSkill}`,
+        });
+      }
+
+      // Find lessons from courses in progress (medium priority)
+      const coursesInProgress =
+        userActivity?.courseActivities
+          ?.filter((ca: any) => !ca.isCompleted)
+          .map((ca: any) => ca.courseId) || [];
+
+      if (coursesInProgress.length > 0) {
+        // Query từ Course để lấy lessons
+        const courses = await Course.find({
+          _id: { $in: coursesInProgress },
+        })
+          .select("_id lessons")
+          .populate({
+            path: "lessons",
+            select: "_id title taskType",
+            match: {
+              _id: { $nin: completedLessonIds.map((id: string) => new mongoose.Types.ObjectId(id)) },
+            },
+          })
+          .limit(2)
+          .lean();
+
+        for (const course of courses) {
+          const lessons = (course.lessons as any[]) || [];
+          for (const lesson of lessons.slice(0, 2)) {
+            if (lesson && lesson._id) {
+              recommendations.push({
+                lessonId: lesson._id,
+                courseId: course._id,
+                priority: "medium",
+                reason: "continue_course",
+              });
+            }
+          }
+        }
+      }
+
+      // Find general lessons (low priority)
+      if (recommendations.length < 5) {
+        const generalLessons = await Lesson.find({
+          _id: { $nin: completedLessonIds.map((id: string) => new mongoose.Types.ObjectId(id)) },
+        })
+          .select("_id title taskType")
+          .limit(5 - recommendations.length)
+          .lean();
+
+        for (const lesson of generalLessons) {
+          const course = await Course.findOne({ lessons: lesson._id })
+            .select("_id")
+            .lean();
+
+          recommendations.push({
+            lessonId: lesson._id,
+            courseId: course?._id || null,
+            priority: "low",
+            reason: "new_content",
+          });
+        }
+      }
+
+      return recommendations.slice(0, 5);
+    } catch (error) {
+      console.error("Error recommending next lessons:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Recommend flashcards to review
+   */
+  private async recommendReviewCards(
+    userId: string | mongoose.Types.ObjectId,
+    activity: IUserActivity
+  ) {
+    try {
+      const { cardLearning } = activity;
+
+      // Tìm cards có nhiều lỗi (difficult cards)
+      const cardFailCount = new Map<string, { count: number; lastSeen: Date }>();
+
+      cardLearning.forEach((card: any) => {
+        const key = card.cardId.toString();
+        if (!card.isCorrect) {
+          const existing = cardFailCount.get(key) || { count: 0, lastSeen: card.reviewedAt };
+          cardFailCount.set(key, {
+            count: existing.count + 1,
+            lastSeen: card.reviewedAt,
+          });
+        }
+      });
+
+      // Sort by fail count (descending)
+      const sortedCards = Array.from(cardFailCount.entries())
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 10);
+
+      return sortedCards.map(([cardId, data]) => ({
+        cardId: new mongoose.Types.ObjectId(cardId),
+        flashcardId: null, // Có thể lookup sau
+        urgency: Math.min(data.count, 10), // 1-10
+        lastSeen: data.lastSeen,
+      }));
+    } catch (error) {
+      console.error("Error recommending review cards:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Recommend study plan
+   */
+  private recommendStudyPlan(insights: any) {
+    const consistency = insights.learningPerformance?.consistency || 0;
+    const avgSessionLength = insights.studyPatterns?.averageSessionLength || 30;
+
+    // Calculate daily minutes based on consistency
+    let dailyMinutes = 30; // default
+    if (consistency < 30) {
+      dailyMinutes = 20; // Học ít → giảm mục tiêu
+    } else if (consistency > 70) {
+      dailyMinutes = 45; // Học nhiều → tăng mục tiêu
+    } else {
+      dailyMinutes = 30;
+    }
+
+    // Calculate content mix based on retention
+    const retention = insights.learningPerformance?.retention || 0;
+    let contentMix = {
+      newLessons: 40,
+      reviewCards: 40,
+      practiceTask: 20,
+    };
+
+    if (retention < 50) {
+      // Retention thấp → review nhiều hơn
+      contentMix = {
+        newLessons: 20,
+        reviewCards: 60,
+        practiceTask: 20,
+      };
+    } else if (retention > 80) {
+      // Retention cao → học mới nhiều hơn
+      contentMix = {
+        newLessons: 50,
+        reviewCards: 30,
+        practiceTask: 20,
+      };
+    }
+
+    return {
+      dailyMinutes,
+      contentMix,
+    };
+  }
+
+  /**
+   * 📈 TÍNH PREDICTIONS (rule-based)
+   */
+  private calculatePredictions(activity: IUserActivity, insights: any) {
+    // 1. Course completion predictions
+    const courseCompletionDates = this.predictCourseCompletion(
+      activity,
+      insights
+    );
+
+    // 2. Skill improvement predictions
+    const skillImprovement = this.predictSkillImprovement(insights);
+
+    return {
+      courseCompletionDates,
+      skillImprovement,
+    };
+  }
+
+  /**
+   * Predict course completion dates
+   */
+  private predictCourseCompletion(activity: IUserActivity, insights: any) {
+    const { courseActivities } = activity;
+    const avgSessionLength = insights.studyPatterns?.averageSessionLength || 30;
+    const studyFrequency = insights.studyPatterns?.studyFrequency || 3;
+
+    return courseActivities
+      .filter((course: any) => !course.isCompleted)
+      .map((course: any) => {
+        // Tính progress
+        const totalLessons = 10; // Giả định, có thể lookup từ DB
+        const completedLessons = activity.lessonActivities.filter(
+          (la: any) =>
+            la.courseId &&
+            la.courseId.toString() === course.courseId.toString() &&
+            la.isCompleted
+        ).length;
+
+        const remainingLessons = Math.max(1, totalLessons - completedLessons);
+
+        // Estimate time per lesson (minutes)
+        const timePerLesson = Math.max(5, avgSessionLength); // At least 5 mins
+
+        // Calculate days to complete
+        const totalMinutesNeeded = remainingLessons * timePerLesson;
+        const minutesPerWeek = Math.max(30, avgSessionLength * studyFrequency); // At least 30 mins/week
+        const weeksNeeded = totalMinutesNeeded / minutesPerWeek;
+        const daysNeeded = Math.ceil(Math.max(1, weeksNeeded * 7)); // At least 1 day
+
+        // Estimated completion date
+        const estimatedDate = new Date();
+        estimatedDate.setDate(estimatedDate.getDate() + daysNeeded);
+
+        // Confidence based on consistency
+        const consistency = insights.learningPerformance?.consistency || 0;
+        const confidence = Math.min(consistency, 90); // Max 90%
+
+        return {
+          courseId: course.courseId,
+          estimatedDate,
+          confidence: Math.round(confidence),
+        };
+      });
+  }
+
+  /**
+   * Predict skill improvement
+   */
+  private predictSkillImprovement(insights: any) {
+    const skillMastery = insights.learningAnalysis?.skillMastery || {};
+    const weeklyProgress = insights.learningPerformance?.weeklyProgress || 0;
+
+    // Calculate average current level
+    const skills = ["listening", "speaking", "reading", "writing"];
+    const levels = skills.map((skill) => skillMastery[skill]?.level || 0);
+    const currentLevel = Math.round(
+      levels.reduce((sum, l) => sum + l, 0) / levels.length
+    );
+
+    // Predict level in 30 days (4 weeks)
+    // progressPerWeek is a percentage, convert to decimal
+    const progressPerWeek = Math.abs(weeklyProgress) > 0
+      ? Math.max(-0.5, Math.min(0.5, weeklyProgress / 100)) // Clamp to [-50%, 50%]
+      : 0.05; // Default 5% if no data
+
+    const projectedLevel = Math.min(
+      100,
+      Math.max(0, Math.round(currentLevel * (1 + progressPerWeek * 4)))
+    );
+
+    // Time to next level (assume levels every 20 points: 0-20, 20-40, 40-60, etc)
+    const nextLevelThreshold = Math.ceil(currentLevel / 20) * 20;
+    const pointsNeeded = Math.max(0, nextLevelThreshold - currentLevel);
+
+    // If already at max or no progress
+    if (pointsNeeded === 0 || progressPerWeek <= 0) {
+      return {
+        currentLevel,
+        projectedLevel,
+        timeToNextLevel: 0,
+      };
+    }
+
+    const pointsPerWeek = currentLevel * progressPerWeek;
+    const weeksNeeded = pointsPerWeek > 0 ? pointsNeeded / pointsPerWeek : 10;
+    const timeToNextLevel = Math.ceil(Math.max(1, weeksNeeded * 7)); // At least 1 day
+
+    return {
+      currentLevel,
+      projectedLevel,
+      timeToNextLevel,
     };
   }
 }

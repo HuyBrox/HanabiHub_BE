@@ -350,4 +350,4 @@ export const getRecentUserActivities = async (
       .status(500)
       .json({ success: false, message: error.message } as ApiResponse);
   }
-};
+};``

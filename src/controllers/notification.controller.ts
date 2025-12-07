@@ -283,7 +283,8 @@ export const getMyNotifications = async (req: AuthRequest, res: Response) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .select("_id type title content isSystem createdAt readBy")
+        .select("_id type title content isSystem createdAt readBy metadata sender")
+        .populate("sender", "fullname username")
         .lean(),
       Notification.countDocuments(query),
     ]);
@@ -302,6 +303,84 @@ export const getMyNotifications = async (req: AuthRequest, res: Response) => {
     } as ApiResponse);
   } catch (error) {
     console.error("getMyNotifications error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+// [PUT] /api/notifications/:id - Update notification (Admin)
+export const updateNotification = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id;
+    const { title, content } = req.body as { title?: string; content?: string };
+
+    const updates: any = {};
+    if (title !== undefined) updates.title = title;
+    if (content !== undefined) updates.content = content;
+
+    const doc = await Notification.findOneAndUpdate(
+      { _id: id, deleted: { $ne: true } },
+      updates,
+      { new: true }
+    ).lean();
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy thông báo",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Cập nhật thông báo thành công",
+      data: doc,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("updateNotification error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+// [DELETE] /api/notifications/:id - Soft delete notification (Admin)
+export const deleteNotification = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id;
+    const doc = await Notification.findOneAndUpdate(
+      { _id: id, deleted: { $ne: true } },
+      { deleted: true },
+      { new: true }
+    ).lean();
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy thông báo",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Xóa thông báo thành công (soft delete)",
+      data: doc,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("deleteNotification error:", error);
     return res.status(500).json({
       success: false,
       message: "Lỗi máy chủ nội bộ",

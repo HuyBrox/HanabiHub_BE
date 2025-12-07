@@ -7,6 +7,7 @@ import { AuthRequest, ApiResponse } from "../types";
 // import { getReciverSocketIds, io } from "../socket/socket.js";
 import { verifyOtp, sendOtp } from "../helpers/otp-genrator";
 import { generateTokenPair, verifyRefreshToken } from "../utils/jwt";
+import { OAuth2Client } from "google-auth-library";
 
 // Đăng ký
 export const register = async (req: Request, res: Response) => {
@@ -36,12 +37,23 @@ export const register = async (req: Request, res: Response) => {
       } as ApiResponse);
     }
 
-    // Kiểm tra user đã tồn tại
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-    if (existingUser) {
+    // Kiểm tra email đã tồn tại (double check - đã check khi gửi OTP nhưng có thể có race condition)
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
       return res.status(400).json({
         success: false,
-        message: "Người dùng với email hoặc tên này đã tồn tại",
+        message: "Email này đã được sử dụng",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Kiểm tra username đã tồn tại
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername) {
+      return res.status(400).json({
+        success: false,
+        message: "Tên người dùng này đã được sử dụng. Vui lòng chọn tên khác.",
         data: null,
         timestamp: new Date().toISOString(),
       } as ApiResponse);
@@ -88,9 +100,10 @@ export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    // Tìm user
-    const user = await User.findOne({ email });
+    // Tìm user (không bao gồm user đã bị xóa)
+    const user = await User.findOne({ email, deleted: { $ne: true } });
     if (!user) {
+      console.error(`❌ Login failed: User not found or deleted - email ${email}`);
       return res.status(401).json({
         success: false,
         message: "Sai thông tin đăng nhập",
@@ -99,9 +112,21 @@ export const login = async (req: Request, res: Response) => {
       } as ApiResponse);
     }
 
+    // Kiểm tra nếu user đăng nhập bằng Google (không có password)
+    if (!user.password) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tài khoản này đăng nhập bằng Google. Vui lòng sử dụng đăng nhập Google.",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
     // Kiểm tra password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
+      console.error(`❌ Login failed: Invalid password for email ${email}`);
       return res.status(401).json({
         success: false,
         message: "Sai thông tin đăng nhập",
@@ -109,6 +134,9 @@ export const login = async (req: Request, res: Response) => {
         timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
+
+    // Log successful login attempt (không log password)
+    console.log(`✅ Login successful: ${email} (${user._id})`);
 
     // Tạo token pair (access + refresh)
     const { accessToken, refreshToken } = generateTokenPair(user);
@@ -237,15 +265,39 @@ export const sendOtpToEmail = async (req: AuthRequest, res: Response) => {
 export const sendOtpToEmailRegister = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
-    await sendOtp(email); // Gửi OTP và lưu vào cơ sở dữ liệu
+
+    // Kiểm tra email có được cung cấp
     if (!email) {
       return res.status(400).json({
         message: "Vui lòng nhập email",
         success: false,
       });
     }
+
+    // Kiểm tra format email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        message: "Email không hợp lệ",
+        success: false,
+      });
+    }
+
+    // Kiểm tra email đã tồn tại TRƯỚC KHI gửi OTP
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        message:
+          "Email này đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.",
+        success: false,
+      });
+    }
+
+    // Email chưa tồn tại, gửi OTP
+    await sendOtp(email); // Gửi OTP và lưu vào cơ sở dữ liệu
+
     return res.status(200).json({
-      message: `OTP đã được giửi đến email ${email}`,
+      message: `OTP đã được gửi đến email ${email}`,
       success: true,
     });
   } catch (error) {
@@ -269,6 +321,15 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
       });
     }
     const email = user.email;
+
+    // Kiểm tra nếu user đăng nhập bằng Google (không có password)
+    if (!user.password) {
+      return res.status(400).json({
+        message: "Tài khoản này đăng nhập bằng Google. Không thể đổi mật khẩu.",
+        success: false,
+      });
+    }
+
     // Kiểm tra mật khẩu cũ
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
@@ -439,40 +500,8 @@ export const logoutAllDevices = async (req: AuthRequest, res: Response) => {
 // [POST] Logout Current Device - chỉ invalidate token hiện tại
 export const logoutCurrentDevice = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
-    const refreshToken = req.cookies?.refreshToken; // Lấy từ cookie thay vì body
-
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "User not authenticated",
-        data: null,
-        timestamp: new Date().toISOString(),
-      } as ApiResponse);
-    }
-
-    if (!refreshToken) {
-      return res.status(400).json({
-        success: false,
-        message: "Refresh token is required",
-        data: null,
-        timestamp: new Date().toISOString(),
-      } as ApiResponse);
-    }
-
-    // Chỉ cần clear cookies, không cần check DB
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not found",
-        data: null,
-        timestamp: new Date().toISOString(),
-      } as ApiResponse);
-    }
-
-    // Chỉ clear cookies, không cần update DB
-    // Access token sẽ tự hết hạn sau 15 phút
+    // Chỉ cần clear cookies, không cần check auth
+    // Vì có thể token đã hết hạn hoặc user đã logout rồi
 
     // Clear access token cookie
     res.clearCookie("token", {
@@ -498,6 +527,194 @@ export const logoutCurrentDevice = async (req: AuthRequest, res: Response) => {
     } as ApiResponse);
   } catch (error) {
     console.error("Logout current device error:", error);
+    // Vẫn clear cookies kể cả khi có lỗi
+    res.clearCookie("token", { path: "/" });
+    res.clearCookie("refreshToken", { path: "/" });
+    
+    return res.status(200).json({
+      success: true,
+      message: "Logout completed (cookies cleared)",
+      data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+// Google OAuth2 Login
+export const googleLogin = async (req: Request, res: Response) => {
+  try {
+    const { idToken, accessToken: googleAccessToken } = req.body;
+
+    if (!idToken && !googleAccessToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Google ID token or access token is required",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    let payload: any = null;
+    const client = new OAuth2Client(
+      process.env.GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID"
+    );
+
+    // Nếu có idToken, verify ID token
+    if (idToken) {
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID",
+      });
+      payload = ticket.getPayload();
+    }
+    // Nếu có googleAccessToken, lấy user info từ Google API
+    else if (googleAccessToken) {
+      try {
+        const response = await fetch(
+          `https://www.googleapis.com/oauth2/v2/userinfo?access_token=${googleAccessToken}`
+        );
+        if (!response.ok) {
+          throw new Error("Invalid access token");
+        }
+        const userInfo = (await response.json()) as {
+          id: string;
+          email: string;
+          name: string;
+          picture: string;
+        };
+        payload = {
+          sub: userInfo.id,
+          email: userInfo.email,
+          name: userInfo.name,
+          picture: userInfo.picture,
+        };
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Google access token",
+          data: null,
+          timestamp: new Date().toISOString(),
+        } as ApiResponse);
+      }
+    }
+
+    if (!payload) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Google token",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    const { sub: googleId, email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email not provided by Google",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Tìm user theo email trước (ưu tiên email vì nó là unique và quan trọng hơn)
+    // Nếu user đã đăng ký bằng email/password, sẽ link Google account với tài khoản đó
+    let user = await User.findOne({ email });
+
+    if (user) {
+      // User đã tồn tại với email này
+      // Nếu chưa có googleId, link Google account với tài khoản này
+      if (!user.googleId) {
+        user.googleId = googleId;
+        if (picture) user.avatar = picture;
+        await user.save();
+      }
+      // Nếu đã có googleId nhưng khác với googleId hiện tại → có thể là tài khoản khác
+      // Nhưng vì email đã match, nên vẫn dùng tài khoản này
+      else if (user.googleId !== googleId) {
+        // Cập nhật googleId mới (trường hợp user đổi Google account)
+        user.googleId = googleId;
+        if (picture) user.avatar = picture;
+        await user.save();
+      }
+    } else {
+      // Không tìm thấy user theo email, kiểm tra xem có user nào đã dùng googleId này chưa
+      const existingGoogleUser = await User.findOne({ googleId });
+      if (existingGoogleUser) {
+        // Đã có user với googleId này nhưng email khác → dùng tài khoản đó
+        user = existingGoogleUser;
+        // Cập nhật email nếu cần (trường hợp user đổi email trên Google)
+        if (user.email !== email) {
+          user.email = email;
+        }
+        if (picture) user.avatar = picture;
+        await user.save();
+      } else {
+        // Tạo user mới
+        // Tạo username từ email (lấy phần trước @)
+        const baseUsername = email.split("@")[0];
+        let username = baseUsername;
+        let counter = 1;
+
+        // Đảm bảo username unique
+        while (await User.findOne({ username })) {
+          username = `${baseUsername}${counter}`;
+          counter++;
+        }
+
+        user = new User({
+          email,
+          googleId,
+          fullname: name || email.split("@")[0],
+          username,
+          avatar: picture,
+          password: undefined, // Không có password cho Google user
+        });
+
+        await user.save();
+      }
+    }
+
+    // Tạo token pair (access + refresh)
+    const { accessToken, refreshToken } = generateTokenPair(user);
+
+    // Set access token vào cookie "token" cho authentication
+    res.cookie("token", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 15 * 60 * 1000, // 15 phút cho access token
+      path: "/",
+    });
+
+    // Gửi refresh token qua httpOnly cookie để bảo mật
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 ngày
+      path: "/",
+    });
+
+    // Trả về access token và thông tin user
+    return res.status(200).json({
+      success: true,
+      message: "Google login successful",
+      data: {
+        accessToken,
+        user: {
+          id: user._id,
+          email: user.email,
+          username: user.username,
+          fullname: user.fullname,
+          avatar: user.avatar,
+        },
+      },
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Google login error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

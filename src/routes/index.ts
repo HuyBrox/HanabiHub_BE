@@ -7,12 +7,10 @@ import messageRoutes from "./message.route";
 import adminRoutes from "./admin.route";
 import userActivityRoutes from "./user-activity.route";
 import courseRoutes from "./course.route";
-import notificationRoutes from "./notification.route";
+import userCourseProgressRoutes from "./user-course-progress.route";
+import learningInsightsRoutes from "./learning-insights.route";
 import newsRoutes from "./news.route";
-import reportRoutes from "./report.route";
-import templateRoutes from "./template.route";
-import userAdminRoutes from "./user-admin.route";
-import exportRoutes from "./export.route";
+import notificationRoutes from "./notification.route";
 const router: Router = Router();
 
 // Auth routes
@@ -28,18 +26,23 @@ router.use("/message", messageRoutes);
 
 // Admin routes
 router.use("/admin", adminRoutes);
-// Admin content management routes
-router.use("", notificationRoutes);
-router.use("", newsRoutes);
-router.use("", reportRoutes);
-router.use("", templateRoutes);
-router.use("", userAdminRoutes);
-router.use("", exportRoutes);
 
 // User Activity tracking routes
-router.use("/activity", userActivityRoutes);
+router.use("/user-activity", userActivityRoutes);
 
 // Course routes
 router.use("/courses", courseRoutes);
+
+// User Course Progress routes
+router.use("/courses", userCourseProgressRoutes);
+
+// Learning Insights routes
+router.use("/learning-insights", learningInsightsRoutes);
+
+// News routes
+router.use("", newsRoutes);
+
+// Notification routes
+router.use("", notificationRoutes);
 
 export default router;

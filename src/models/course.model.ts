@@ -1,6 +1,4 @@
-import e from "connect-flash";
 import mongoose from "mongoose";
-import { de } from "zod/v4/locales/index.cjs";
 import User from "./user.model";
 const CourseSchema = new mongoose.Schema(
   {

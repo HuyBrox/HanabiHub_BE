@@ -1,15 +1,19 @@
 import { Response } from "express";
 import News from "../models/news.model";
+import Notification from "../models/notification.model";
+import { io } from "../socket/socket-server";
 import { ApiResponse, AuthRequest } from "../types";
 
 // [POST] /api/news
 export const createNews = async (req: AuthRequest, res: Response) => {
   try {
-    const { title, content, status, tags } = req.body as {
+    const { title, content, status, tags, image, publishedAt } = req.body as {
       title?: string;
       content?: string;
       status?: "draft" | "published";
       tags?: string[];
+      image?: string; // Base64 or URL
+      publishedAt?: string; // ISO date string
     };
 
     if (!title || !content) {
@@ -22,13 +26,31 @@ export const createNews = async (req: AuthRequest, res: Response) => {
     }
 
     const now = new Date();
+    // Parse publishedAt if provided, otherwise use now for published status
+    let publishDate: Date | null = null;
+    if (publishedAt) {
+      publishDate = new Date(publishedAt);
+      // Validate date
+      if (isNaN(publishDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Ngày xuất bản không hợp lệ",
+          data: null,
+          timestamp: new Date().toISOString(),
+        } as ApiResponse);
+      }
+    } else if (status === "published") {
+      publishDate = now;
+    }
+
     const doc = await News.create({
       title,
       content,
       author: req.user?.id,
       status: status || "draft",
       tags: Array.isArray(tags) ? tags : [],
-      publishedAt: status === "published" ? now : null,
+      image: image || undefined, // Add image field
+      publishedAt: publishDate,
     });
 
     return res.status(201).json({
@@ -141,6 +163,9 @@ export const updateNews = async (req: AuthRequest, res: Response) => {
       tags?: string[];
     };
 
+    // Load previous to detect status transitions
+    const prev = await News.findById(id).lean();
+
     const updates: any = {};
     if (title !== undefined) updates.title = title;
     if (content !== undefined) updates.content = content;
@@ -162,6 +187,40 @@ export const updateNews = async (req: AuthRequest, res: Response) => {
         data: null,
         timestamp: new Date().toISOString(),
       } as ApiResponse);
+    }
+
+    // If this update changed status from non-published to published, create notification
+    try {
+      if (prev?.status !== "published" && updates.status === "published") {
+        const excerpt = String(doc.content || "").slice(0, 300);
+        const NotificationModel = (await import("../models/notification.model")).default;
+        const notification = await NotificationModel.create({
+          type: "system",
+          title: doc.title,
+          content: excerpt,
+          sender: req.user?.id,
+          receivers: [],
+          isSystem: true,
+          metadata: { 
+            newsId: doc._id,
+            image: doc.image, // Store image directly in metadata
+          },
+        });
+
+        io.emit("notification", {
+          type: "system",
+          title: doc.title,
+          message: excerpt,
+          senderId: req.user?.id,
+          timestamp: new Date(),
+          notificationId: notification._id,
+          newsId: doc._id,
+          image: doc.image, // Include image in socket event
+          // FE will fetch full news data (including image) using newsId if needed
+        });
+      }
+    } catch (notifErr) {
+      console.error("updateNews: failed to create/broadcast notification:", notifErr);
     }
 
     return res.status(200).json({

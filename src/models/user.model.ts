@@ -29,7 +29,12 @@ const UserSchema = new Schema<IUser>(
     },
     password: {
       type: String,
-      required: true,
+      required: false,
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // Cho phép null nhưng unique nếu có giá trị
     },
     avatar: {
       type: String,
@@ -84,6 +89,10 @@ const UserSchema = new Schema<IUser>(
     isOnline: {
       type: Boolean,
       default: false,
+    },
+    isPrivate: {
+      type: Boolean,
+      default: false, // Mặc định là public profile
     },
 
     // Hoạt động gần đây

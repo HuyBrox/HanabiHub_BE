@@ -12,6 +12,9 @@ import {
   getWeakAreas,
   getProgressTimeline,
   getDetailedPerformance,
+  getRecommendations,
+  getPredictions,
+  getAIAdvice,
 } from "../controllers/learning-insights.controller";
 import { isAuth } from "../middleware/isAuth";
 
@@ -61,6 +64,19 @@ router.get("/weak-areas", isAuth, getWeakAreas);
 
 // Lấy progress timeline (30 ngày)
 router.get("/progress-timeline", isAuth, getProgressTimeline);
+
+// ========================================
+// RECOMMENDATIONS & PREDICTIONS
+// ========================================
+
+// Lấy recommendations (rule-based, không dùng AI)
+router.get("/recommendations", isAuth, getRecommendations);
+
+// Lấy predictions (rule-based)
+router.get("/predictions", isAuth, getPredictions);
+
+// Lấy AI advice (text only, động viên từ AI)
+router.get("/ai-advice", isAuth, getAIAdvice);
 
 // ========================================
 // ACTIONS

@@ -283,7 +283,19 @@ export const trackFlashcardSession = async (
       studiedAt, // thời gian học (nếu không có thì lấy thời gian hiện tại)
     } = req.body;
 
+    // 🔍 DEBUG: Log incoming flashcard tracking request
+    console.log("\n🎴 FLASHCARD SESSION TRACKING REQUEST:");
+    console.log("  User:", userId);
+    console.log("  Flashcard ID:", flashcardId);
+    console.log("  Cards Studied:", cardsStudied);
+    console.log("  Correct Answers:", correctAnswers);
+    console.log("  Session Duration:", sessionDuration, "seconds");
+    console.log("  Difficulty:", difficulty);
+    console.log("  Timestamp:", new Date().toLocaleString());
+    console.log("  FULL BODY:", JSON.stringify(req.body, null, 2));
+
     if (!flashcardId || !cardsStudied) {
+      console.error("❌ VALIDATION FAILED:", { flashcardId, cardsStudied });
       return res.status(400).json({
         success: false,
         message: "flashcardId and cardsStudied are required",
@@ -306,6 +318,7 @@ export const trackFlashcardSession = async (
       studiedAt: studiedAt ? new Date(studiedAt) : new Date(),
     } as any);
 
+
     // Update daily stats - flashcards don't count as lessons
     updateDailyStats(activity, sessionDuration || 0, cardsStudied, false);
 
@@ -323,7 +336,7 @@ export const trackFlashcardSession = async (
       message: "Flashcard session tracked",
     });
   } catch (error: any) {
-    console.error("Error tracking flashcard session:", error);
+    console.error("❌ Error tracking flashcard session:", error);
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -390,6 +403,9 @@ export const trackCardLearning = async (
       reviewCount,
       studiedAt: studiedAt ? new Date(studiedAt) : new Date(),
     } as any);
+
+    // Update daily stats for flashcard learning
+    updateFlashcardDailyStats(activity, isCorrect || false, masteryLevel === "mastered");
 
     await activity.save();
 
@@ -717,19 +733,71 @@ function updateDailyStats(
   if (existingDayIndex !== -1) {
     // Update existing day
     const day = activity.dailyLearning[existingDayIndex];
-    day.timeSpent = (day.timeSpent || 0) + timeSpent;
+    day.totalStudyTime = (day.totalStudyTime || 0) + timeSpent; // ✅ Fixed field name
     // ✅ Only increment if lesson was actually completed
     if (lessonCompleted) {
       day.lessonsCompleted = (day.lessonsCompleted || 0) + 1;
     }
-    day.cardsStudied = (day.cardsStudied || 0) + cardsStudied;
+    day.cardsReviewed = (day.cardsReviewed || 0) + cardsStudied; // ✅ Fixed field name
+    // For new cards learned, we'll track separately in flashcard tracking
   } else {
     // Add new day
     activity.dailyLearning.push({
       date: today,
-      timeSpent,
+      totalStudyTime: timeSpent, // ✅ Fixed field name
       lessonsCompleted: lessonCompleted ? 1 : 0, // ✅ Only count if completed
-      cardsStudied,
+      cardsReviewed: cardsStudied, // ✅ Fixed field name
+      cardsLearned: 0, // Will be updated separately in flashcard tracking
+      correctRate: 0, // Will be calculated in flashcard tracking
+      streakDays: 0, // Will be calculated later
+    });
+  }
+}
+
+/**
+ * Update daily flashcard stats (cardsLearned, correctRate)
+ */
+function updateFlashcardDailyStats(
+  activity: any,
+  isCorrect: boolean,
+  isNewCardMastered: boolean
+) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const existingDayIndex = activity.dailyLearning.findIndex((day: any) => {
+    const dayDate = new Date(day.date);
+    dayDate.setHours(0, 0, 0, 0);
+    return dayDate.getTime() === today.getTime();
+  });
+
+  if (existingDayIndex !== -1) {
+    // Update existing day
+    const day = activity.dailyLearning[existingDayIndex];
+
+    // Update cardsLearned if this card was newly mastered
+    if (isNewCardMastered) {
+      day.cardsLearned = (day.cardsLearned || 0) + 1;
+    }
+
+    // Update correctRate - recalculate based on all cards reviewed today
+    const totalReviewed = day.cardsReviewed || 0;
+    if (totalReviewed > 0) {
+      const currentCorrect = (day.correctRate || 0) * totalReviewed / 100;
+      const newCorrect = currentCorrect + (isCorrect ? 1 : 0);
+      day.correctRate = Math.round((newCorrect / totalReviewed) * 100);
+    }
+  } else {
+    // This shouldn't happen if updateDailyStats was called first
+    // But just in case, create a minimal record
+    activity.dailyLearning.push({
+      date: today,
+      totalStudyTime: 0,
+      lessonsCompleted: 0,
+      cardsReviewed: 0,
+      cardsLearned: isNewCardMastered ? 1 : 0,
+      correctRate: isCorrect ? 100 : 0,
+      streakDays: 0,
     });
   }
 }
