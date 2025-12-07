@@ -47,7 +47,6 @@ router.use("/courses", userCourseProgressRoutes);
 router.use("/learning-insights", learningInsightsRoutes);
 
 // ✅ NEW: nhóm route quản lý user cho Admin
-// FE đang gọi: /api/v1/users.admin/list → đúng path này luôn
 router.use("/users.admin", usersAdminRoute);
 
 export default router;
