@@ -11,9 +11,6 @@ export const isAuth = (
   try {
     // Đọc token từ cookie thay vì Authorization header
     const token = req.cookies.token;
-    console.log("=== isAuth middleware ===");
-    console.log("Token from cookie:", token ? "Token found" : "No token");
-    console.log("All cookies:", req.cookies);
 
     if (!token) {
       res.status(401).json({
@@ -27,18 +24,16 @@ export const isAuth = (
 
     // Verify access token
     const decoded = verifyAccessToken(token);
-    console.log("Decoded token:", decoded);
     req.user = {
       id: decoded.id,
       email: decoded.email,
       isAdmin: decoded.isAdmin || false,
       name: decoded.email, // temporary fallback
     };
-    console.log("req.user set to:", req.user);
 
     next();
   } catch (error) {
-    console.log("Token verification error:", error);
+    console.error("Token verification error:", error);
     res.status(401).json({
       success: false,
       message: "Access token không hợp lệ hoặc đã hết hạn",
