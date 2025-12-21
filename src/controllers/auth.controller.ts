@@ -81,6 +81,7 @@ export const register = async (req: Request, res: Response) => {
         email: newUser.email,
         username: newUser.username,
         fullname: newUser.fullname,
+        isAdmin: newUser.isAdmin,
       },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
@@ -166,6 +167,7 @@ export const login = async (req: Request, res: Response) => {
           username: user.username,
           fullname: user.fullname,
           avatar: user.avatar,
+          isAdmin: user.isAdmin,
         },
       },
       timestamp: new Date().toISOString(),
@@ -732,6 +734,7 @@ export const googleLogin = async (req: Request, res: Response) => {
           username: user.username,
           fullname: user.fullname,
           avatar: user.avatar,
+          isAdmin: user.isAdmin,
         },
       },
       timestamp: new Date().toISOString(),
