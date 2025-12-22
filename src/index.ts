@@ -17,6 +17,10 @@ dotenv.config();
 
 const PORT: number = parseInt(process.env.PORT || "8080", 10);
 
+// Trust proxy để detect HTTPS từ X-Forwarded-Proto header (cần cho Render, Vercel, etc.)
+// Điều này quan trọng để cookies được set đúng với Secure flag
+app.set("trust proxy", 1);
+
 // Middleware
 app.use(helmet());
 app.use(morgan("combined"));

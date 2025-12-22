@@ -8,6 +8,11 @@ import { AuthRequest, ApiResponse } from "../types";
 import { verifyOtp, sendOtp } from "../helpers/otp-genrator";
 import { generateTokenPair, verifyRefreshToken } from "../utils/jwt";
 import { OAuth2Client } from "google-auth-library";
+import {
+  setAccessTokenCookie,
+  setRefreshTokenCookie,
+  clearAuthCookies,
+} from "../utils/cookie-helper";
 
 // Đăng ký
 export const register = async (req: Request, res: Response) => {
@@ -137,23 +142,9 @@ export const login = async (req: Request, res: Response) => {
     // Tạo token pair (access + refresh)
     const { accessToken, refreshToken } = generateTokenPair(user);
 
-    // Set access token vào cookie "token" cho authentication
-    res.cookie("token", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 15 * 60 * 1000, // 15 phút cho access token
-      path: "/",
-    });
-
-    // Gửi refresh token qua httpOnly cookie để bảo mật
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Chỉ gửi cookie qua HTTPS trong môi trường production
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" cho cross-origin trong production
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 ngày
-      path: "/", // Có thể truy cập từ tất cả các route
-    });
+    // Set cookies với options tự động detect production/HTTPS
+    setAccessTokenCookie(res, accessToken, req);
+    setRefreshTokenCookie(res, refreshToken, req);
 
     // Chỉ trả về access token và thông tin user (KHÔNG trả refresh token)
     return res.status(200).json({
@@ -412,23 +403,9 @@ export const refreshToken = async (req: Request, res: Response) => {
     // Tạo token pair mới
     const tokens = generateTokenPair(user);
 
-    // Set access token mới vào cookie
-    res.cookie("token", tokens.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 15 * 60 * 1000, // 15 phút
-      path: "/",
-    });
-
-    // Gửi refresh token mới qua cookie
-    res.cookie("refreshToken", tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 ngày
-      path: "/",
-    });
+    // Set cookies mới với options tự động detect production/HTTPS
+    setAccessTokenCookie(res, tokens.accessToken, req);
+    setRefreshTokenCookie(res, tokens.refreshToken, req);
 
     return res.status(200).json({
       success: true,
@@ -469,13 +446,8 @@ export const logoutAllDevices = async (req: AuthRequest, res: Response) => {
       refreshToken: null,
     });
 
-    // Clear refresh token cookie
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
+    // Clear cookies với options phù hợp
+    clearAuthCookies(res, req);
 
     return res.status(200).json({
       success: true,
@@ -532,21 +504,8 @@ export const logoutCurrentDevice = async (req: AuthRequest, res: Response) => {
     // Chỉ clear cookies, không cần update DB
     // Access token sẽ tự hết hạn sau 15 phút
 
-    // Clear access token cookie
-    res.clearCookie("token", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
-
-    // Clear refresh token cookie
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
+    // Clear cookies với options phù hợp
+    clearAuthCookies(res, req);
 
     return res.status(200).json({
       success: true,
@@ -704,23 +663,9 @@ export const googleLogin = async (req: Request, res: Response) => {
     // Tạo token pair (access + refresh)
     const { accessToken, refreshToken } = generateTokenPair(user);
 
-    // Set access token vào cookie "token" cho authentication
-    res.cookie("token", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 15 * 60 * 1000, // 15 phút cho access token
-      path: "/",
-    });
-
-    // Gửi refresh token qua httpOnly cookie để bảo mật
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 ngày
-      path: "/",
-    });
+    // Set cookies với options tự động detect production/HTTPS
+    setAccessTokenCookie(res, accessToken, req);
+    setRefreshTokenCookie(res, refreshToken, req);
 
     // Trả về access token và thông tin user
     return res.status(200).json({

@@ -13,6 +13,17 @@ export const isAuth = (
     const token = req.cookies.token;
 
     if (!token) {
+      // Log thông tin về cookies để debug (chỉ trong development hoặc khi có lỗi)
+      if (process.env.NODE_ENV === "development") {
+        console.log("[isAuth] No token found. Cookies:", {
+          hasCookies: !!req.cookies,
+          cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
+          allCookies: req.cookies,
+          origin: req.headers.origin,
+          referer: req.headers.referer,
+        });
+      }
+
       res.status(401).json({
         success: false,
         message: "Không có token, truy cập bị từ chối.",
