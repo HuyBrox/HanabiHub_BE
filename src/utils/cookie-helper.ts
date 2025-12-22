@@ -41,8 +41,55 @@ export const isHttpsRequest = (req: any): boolean => {
 };
 
 /**
+ * Kiểm tra xem request có phải cross-origin không
+ */
+export const isCrossOriginRequest = (req?: any): boolean => {
+  if (!req) return false;
+
+  const origin = req.headers?.origin;
+  const host = req.headers?.host;
+  const referer = req.headers?.referer;
+
+  // Nếu có origin header và khác với host, là cross-origin
+  if (origin && host) {
+    try {
+      const originUrl = new URL(origin);
+      const hostUrl = new URL(`https://${host}`);
+
+      // Cross-origin nếu protocol, hostname, hoặc port khác nhau
+      if (
+        originUrl.hostname !== hostUrl.hostname ||
+        originUrl.protocol !== hostUrl.protocol ||
+        originUrl.port !== hostUrl.port
+      ) {
+        return true;
+      }
+    } catch (e) {
+      // Nếu không parse được URL, kiểm tra đơn giản
+      if (origin && !origin.includes(host)) {
+        return true;
+      }
+    }
+  }
+
+  // Nếu có referer và khác với host, có thể là cross-origin
+  if (referer && host) {
+    try {
+      const refererUrl = new URL(referer);
+      if (refererUrl.hostname !== host.split(":")[0]) {
+        return true;
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  return false;
+};
+
+/**
  * Lấy cookie options cho authentication cookies
- * Tự động detect production và HTTPS để set đúng SameSite và Secure
+ * Tự động detect production, HTTPS, và cross-origin để set đúng SameSite và Secure
  */
 export const getAuthCookieOptions = (req?: any): {
   httpOnly: boolean;
@@ -53,10 +100,14 @@ export const getAuthCookieOptions = (req?: any): {
 } => {
   const isProd = isProduction();
   const isHttps = req ? isHttpsRequest(req) : isProd;
+  const isCrossOrigin = req ? isCrossOriginRequest(req) : false;
 
-  // Nếu là production hoặc HTTPS request, dùng SameSite=None; Secure
-  // Điều này cần thiết cho cross-origin requests
-  const useSecureCookies = isProd || isHttps;
+  // QUAN TRỌNG:
+  // 1. Nếu là production, LUÔN dùng SameSite=None; Secure (vì production luôn cross-origin)
+  // 2. Nếu là HTTPS request (qua proxy), cũng dùng SameSite=None; Secure
+  // 3. Nếu detect được cross-origin, cũng dùng SameSite=None; Secure
+  // Điều này đảm bảo cookies được gửi trong cross-origin requests, đặc biệt quan trọng trong incognito mode
+  const useSecureCookies = isProd || isHttps || isCrossOrigin;
 
   return {
     httpOnly: true,
@@ -86,9 +137,12 @@ export const setAccessTokenCookie = (
     secure: options.secure,
     sameSite: options.sameSite,
     isHttps: req ? isHttpsRequest(req) : false,
+    isCrossOrigin: req ? isCrossOriginRequest(req) : false,
+    isProduction: isProduction(),
     nodeEnv: process.env.NODE_ENV,
     forwardedProto: req?.headers?.["x-forwarded-proto"],
     origin: req?.headers?.origin,
+    host: req?.headers?.host,
   });
 };
 
@@ -112,9 +166,12 @@ export const setRefreshTokenCookie = (
     secure: options.secure,
     sameSite: options.sameSite,
     isHttps: req ? isHttpsRequest(req) : false,
+    isCrossOrigin: req ? isCrossOriginRequest(req) : false,
+    isProduction: isProduction(),
     nodeEnv: process.env.NODE_ENV,
     forwardedProto: req?.headers?.["x-forwarded-proto"],
     origin: req?.headers?.origin,
+    host: req?.headers?.host,
   });
 };
 
