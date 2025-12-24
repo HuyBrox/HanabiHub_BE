@@ -13,6 +13,7 @@ import userCourseProgressRoutes from "./user-course-progress.route";
 import learningInsightsRoutes from "./learning-insights.route";
 import newsRoutes from "./news.route";
 import notificationRoutes from "./notification.route";
+import webrtcRoutes from "./webrtc.route";
 
 // ✅ import router users.admin (đúng path, KHÔNG lồng thêm /routes)
 import usersAdminRoute from "./usersAdmin.route";
@@ -55,6 +56,9 @@ router.use("", newsRoutes);
 
 // Notification routes
 router.use("", notificationRoutes);
+
+// WebRTC routes (TURN credentials)
+router.use("/webrtc", webrtcRoutes);
 
 // ✅ NEW: nhóm route quản lý user cho Admin
 router.use("/users.admin", usersAdminRoute);
