@@ -71,7 +71,8 @@ export const getCourseById = async (req: Request, res: Response) => {
           select: "_id", // Only need userId for checking completion
         },
       })
-      .populate("students", "fullname username avatar");
+      .populate("students", "fullname username avatar")
+      .populate("ratings.user", "fullname username avatar");
 
     if (!course) {
       return res.status(404).json({
@@ -596,6 +597,73 @@ export const deleteCourse = async (req: AuthRequest, res: Response) => {
       success: false,
       message: "Lỗi máy chủ nội bộ",
       data: null,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+// Đánh giá khóa học
+export const rateCourse = async (req: AuthRequest, res: Response) => {
+  try {
+    const courseId = req.params.id;
+    const userId = req.user?.id;
+    const { rating } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Bạn cần đăng nhập để đánh giá",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    if (typeof rating !== "number" || rating < 1 || rating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Đánh giá phải là số từ 1 đến 5",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy khóa học",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Find existing rating by this user
+    const ratingsArray = course.ratings as any[];
+    const existingIndex = ratingsArray.findIndex(
+      (r: any) => r.user && r.user.toString() === userId
+    );
+
+    if (existingIndex !== -1) {
+      // Update existing rating
+      ratingsArray[existingIndex].rating = rating;
+    } else {
+      // Add new rating
+      ratingsArray.push({ user: userId as any, rating });
+    }
+
+    await course.save();
+
+    // Populate ratings.user để trả về đầy đủ thông tin
+    await course.populate("ratings.user", "fullname username avatar");
+
+    return res.status(200).json({
+      success: true,
+      message: "Đánh giá khóa học thành công",
+      data: course,
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  } catch (error) {
+    console.error("Error rating course:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ",
       timestamp: new Date().toISOString(),
     } as ApiResponse);
   }
