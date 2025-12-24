@@ -130,23 +130,46 @@
 //   }
 // }
 
-//==============================dùng send grid vì google phiền vl========================
+//==============================Dùng Gmail App Password (đơn giản hơn SendGrid)========================
 import dotenv from "dotenv";
-import sgMail from "@sendgrid/mail";
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
-// Cấu hình SendGrid API Key
-sgMail.setApiKey(process.env.SENDGRID_API_KEY as string);
+// Tạo transporter dùng Gmail App Password
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // dùng SSL
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS, // Gmail App Password (không phải mật khẩu thường)
+  },
+});
+
+// Verify transporter khi khởi động
+transporter.verify((error) => {
+  if (error) {
+    console.error("❌ Gmail transporter verification failed:", error);
+  } else {
+    console.log("✅ Gmail transporter ready");
+  }
+});
 
 // Hàm gửi OTP qua email
 export async function sendOtpEmail(
   email: string,
   otp: string | number
 ): Promise<void> {
-  const msg = {
+  // Kiểm tra EMAIL_USER và EMAIL_PASS
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error("❌ EMAIL_USER or EMAIL_PASS is not set");
+    throw new Error("Gmail credentials are not configured");
+  }
+
+  const mailOptions = {
+    from: `"HanabiHub" <${process.env.EMAIL_USER}>`,
     to: email,
-    from: `"HanabiHub" <Huybrox.dev@gmail.com>`, // email bạn đã verify trong SendGrid
     subject: "Mã OTP xác thực của bạn đây!",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
@@ -162,7 +185,7 @@ export async function sendOtpEmail(
         <p style="text-align: center; font-size: 16px;">Trân trọng! <span style=" font-size: 16px; font-weight: bold; color: #333;"> Đội ngũ hỗ trợ </span></p>
         <p style="text-align: center; font-size: 14px; color: #555;">Liên hệ hỗ trợ:</p>
         <p style="text-align: center; font-size: 14px; color: #555;">
-          Email: <a href="mailto:Huybrox.dev@gmail.com" style="color: #0056b3;">Huybrox.dev@gmail.com</a><br>
+          Email: <a href="mailto:${process.env.EMAIL_USER}" style="color: #0056b3;">${process.env.EMAIL_USER}</a><br>
           Facebook: <a href="https://www.facebook.com/huybrox/" style="color: #0056b3;">Facebook nhà phát triển</a>
         </p>
       </div>
@@ -170,10 +193,22 @@ export async function sendOtpEmail(
   };
 
   try {
-    await sgMail.send(msg);
-    console.log("✅ OTP sent to email:", email);
-  } catch (error) {
+    await transporter.sendMail(mailOptions);
+    console.log("✅ OTP sent to email via Gmail:", email);
+  } catch (error: any) {
     console.error("❌ Error sending OTP email:", error);
-    throw new Error("Error sending OTP");
+
+    // Log chi tiết lỗi
+    if (error.response) {
+      console.error("Gmail SMTP error:", {
+        code: error.code,
+        command: error.command,
+        response: error.response,
+      });
+    }
+
+    // Throw error với thông tin chi tiết hơn
+    const errorMessage = error?.response || error?.message || "Error sending OTP";
+    throw new Error(`Gmail error: ${errorMessage}`);
   }
 }

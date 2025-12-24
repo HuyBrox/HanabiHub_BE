@@ -281,6 +281,17 @@ export const sendOtpToEmailRegister = async (req: Request, res: Response) => {
       });
     }
 
+    // Kiểm tra Gmail credentials có được cấu hình không
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error(
+        "❌ Gmail credentials (EMAIL_USER or EMAIL_PASS) are not configured"
+      );
+      return res.status(500).json({
+        message: "Email service chưa được cấu hình. Vui lòng liên hệ admin.",
+        success: false,
+      });
+    }
+
     // Email chưa tồn tại, gửi OTP
     await sendOtp(email); // Gửi OTP và lưu vào cơ sở dữ liệu
 
@@ -288,10 +299,38 @@ export const sendOtpToEmailRegister = async (req: Request, res: Response) => {
       message: `OTP đã được gửi đến email ${email}`,
       success: true,
     });
-  } catch (error) {
-    console.log(error);
+  } catch (error: any) {
+    console.error("❌ Error in sendOtpToEmailRegister:", error);
+
+    // Xử lý lỗi cụ thể từ Gmail SMTP
+    console.error("Gmail SMTP error details:", {
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      message: error.message,
+    });
+
+    // Nếu là lỗi authentication (App Password không đúng)
+    if (error.code === "EAUTH" || error.response?.includes("Invalid login")) {
+      return res.status(500).json({
+        message:
+          "Gmail App Password không hợp lệ. Vui lòng kiểm tra lại cấu hình.",
+        success: false,
+      });
+    }
+
+    // Nếu là lỗi khác
+    const errorMessage =
+      error?.response || error?.message || "Lỗi không xác định";
     return res.status(500).json({
-      message: "Đã xảy ra lỗi",
+      message: `Không thể gửi email: ${errorMessage}`,
+      success: false,
+    });
+
+    // Lỗi khác (database, network, etc.)
+    return res.status(500).json({
+      message:
+        error?.message || "Đã xảy ra lỗi khi gửi OTP. Vui lòng thử lại sau.",
       success: false,
     });
   }
