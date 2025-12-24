@@ -427,11 +427,30 @@ export const getFlashCardById = async (req: AuthRequest, res: Response) => {
     const cardId = req.params.id;
     const userId = req.user?.id;
 
-    const flashCard = await FlashCard.findOne({ _id: cardId, user: userId });
+    const flashCard = await FlashCard.findById(cardId).populate(
+      "user",
+      "fullname username avatar"
+    );
+
     if (!flashCard) {
       return res.status(404).json({
         success: false,
         message: "Không tìm thấy FlashCard",
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Kiểm tra quyền truy cập (public hoặc owner)
+    const userIdString = userId?.toString();
+    const userObj = flashCard.user as any;
+    const cardUserId = userObj?._id
+      ? userObj._id.toString()
+      : userObj?.toString();
+
+    if (!flashCard.isPublic && cardUserId !== userIdString) {
+      return res.status(403).json({
+        success: false,
+        message: "Không có quyền truy cập FlashCard này",
         timestamp: new Date().toISOString(),
       } as ApiResponse);
     }
@@ -538,7 +557,7 @@ export const updateFlashCard = async (req: AuthRequest, res: Response) => {
     if (name) flashCard.name = name;
     if (cards) {
       // Parse cards nếu nó là string JSON
-      flashCard.cards = typeof cards === 'string' ? JSON.parse(cards) : cards;
+      flashCard.cards = typeof cards === "string" ? JSON.parse(cards) : cards;
     }
     // Parse isPublic từ string hoặc boolean
     if (isPublic !== undefined) {
