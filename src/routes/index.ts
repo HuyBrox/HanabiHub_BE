@@ -11,6 +11,8 @@ import userActivityRoutes from "./user-activity.route";
 import courseRoutes from "./course.route";
 import userCourseProgressRoutes from "./user-course-progress.route";
 import learningInsightsRoutes from "./learning-insights.route";
+import newsRoutes from "./news.route";
+import notificationRoutes from "./notification.route";
 
 // ✅ import router users.admin (đúng path, KHÔNG lồng thêm /routes)
 import usersAdminRoute from "./usersAdmin.route";
@@ -47,6 +49,12 @@ router.use("/courses", userCourseProgressRoutes);
 
 // Learning insights routes
 router.use("/learning-insights", learningInsightsRoutes);
+
+// News routes
+router.use("", newsRoutes);
+
+// Notification routes
+router.use("", notificationRoutes);
 
 // ✅ NEW: nhóm route quản lý user cho Admin
 router.use("/users.admin", usersAdminRoute);
