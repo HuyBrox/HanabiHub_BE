@@ -128,7 +128,7 @@ export const createFlashList = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     const { title, isPublic, level, description, flashcards } = req.body as {
       title: string;
-      isPublic?: boolean;
+      isPublic?: boolean | string;
       level?: string;
       description?: string;
       flashcards?: string[];
@@ -139,6 +139,14 @@ export const createFlashList = async (req: AuthRequest, res: Response) => {
       if (uploadedImage) {
         thumbnail = uploadedImage;
       }
+    }
+
+    // Parse isPublic từ string hoặc boolean
+    let isPublicValue = false;
+    if (typeof isPublic === "boolean") {
+      isPublicValue = isPublic;
+    } else if (typeof isPublic === "string") {
+      isPublicValue = isPublic.toLowerCase() === "true";
     }
 
     if (!title) {
@@ -152,7 +160,7 @@ export const createFlashList = async (req: AuthRequest, res: Response) => {
     const flashList = await FlashList.create({
       title,
       user: userId,
-      isPublic,
+      isPublic: isPublicValue,
       level,
       thumbnail,
       flashcards: flashcards || [],
@@ -276,7 +284,14 @@ export const updateFlashList = async (req: AuthRequest, res: Response) => {
     }
 
     if (title) flashList.title = title;
-    if (typeof isPublic === "boolean") flashList.isPublic = isPublic;
+    // Parse isPublic từ string hoặc boolean
+    if (isPublic !== undefined) {
+      if (typeof isPublic === "boolean") {
+        flashList.isPublic = isPublic;
+      } else if (typeof isPublic === "string") {
+        flashList.isPublic = isPublic.toLowerCase() === "true";
+      }
+    }
     if (level) flashList.level = level;
     if (thumbnail) flashList.thumbnail = thumbnail;
 
@@ -360,7 +375,7 @@ export const deleteAllFlashLists = async (req: AuthRequest, res: Response) => {
 };
 
 //====================FlashCard Management======================
-// [GET] /api/flashcards - Lấy tất cả FlashCard của user
+// [GET] /api/flashcards - Lấy tất cả FlashCard (public + của mình)
 export const getAllFlashCards = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -368,12 +383,18 @@ export const getAllFlashCards = async (req: AuthRequest, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
 
+    // Lấy cả public flashcards và flashcards của mình
+    const filter = {
+      $or: [{ isPublic: true }, { user: userId }],
+    };
+
     const [flashCards, total] = await Promise.all([
-      FlashCard.find({ user: userId })
+      FlashCard.find(filter)
+        .populate("user", "fullname username avatar")
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
-      FlashCard.countDocuments({ user: userId }),
+      FlashCard.countDocuments(filter),
     ]);
 
     return res.status(200).json({
@@ -456,6 +477,14 @@ export const createFlashCard = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Parse isPublic từ string hoặc boolean
+    let isPublicValue = false;
+    if (typeof isPublic === "boolean") {
+      isPublicValue = isPublic;
+    } else if (typeof isPublic === "string") {
+      isPublicValue = isPublic.toLowerCase() === "true";
+    }
+
     if (!name) {
       return res.status(400).json({
         success: false,
@@ -468,7 +497,7 @@ export const createFlashCard = async (req: AuthRequest, res: Response) => {
       name,
       cards: cardsData || [],
       user: userId,
-      isPublic: typeof isPublic === "boolean" ? isPublic : false,
+      isPublic: isPublicValue,
       thumbnail: thumbnail || undefined,
       description: description || "",
       level: level || "N5",
@@ -511,7 +540,14 @@ export const updateFlashCard = async (req: AuthRequest, res: Response) => {
       // Parse cards nếu nó là string JSON
       flashCard.cards = typeof cards === 'string' ? JSON.parse(cards) : cards;
     }
-    if (typeof isPublic === "boolean") flashCard.isPublic = isPublic;
+    // Parse isPublic từ string hoặc boolean
+    if (isPublic !== undefined) {
+      if (typeof isPublic === "boolean") {
+        flashCard.isPublic = isPublic;
+      } else if (typeof isPublic === "string") {
+        flashCard.isPublic = isPublic.toLowerCase() === "true";
+      }
+    }
     if (thumbnail) flashCard.thumbnail = thumbnail;
     if (description !== undefined) flashCard.description = description;
     if (level) flashCard.level = level;

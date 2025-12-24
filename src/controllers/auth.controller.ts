@@ -8,6 +8,11 @@ import { AuthRequest, ApiResponse } from "../types";
 import { verifyOtp, sendOtp } from "../helpers/otp-genrator";
 import { generateTokenPair, verifyRefreshToken } from "../utils/jwt";
 import { OAuth2Client } from "google-auth-library";
+import {
+  setAccessTokenCookie,
+  setRefreshTokenCookie,
+  clearAuthCookies,
+} from "../utils/cookie-helper";
 
 // Đăng ký
 export const register = async (req: Request, res: Response) => {
@@ -81,6 +86,7 @@ export const register = async (req: Request, res: Response) => {
         email: newUser.email,
         username: newUser.username,
         fullname: newUser.fullname,
+        isAdmin: newUser.isAdmin,
       },
       timestamp: new Date().toISOString(),
     } as ApiResponse);
@@ -100,10 +106,9 @@ export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    // Tìm user (không bao gồm user đã bị xóa)
-    const user = await User.findOne({ email, deleted: { $ne: true } });
+    // Tìm user
+    const user = await User.findOne({ email });
     if (!user) {
-      console.error(`❌ Login failed: User not found or deleted - email ${email}`);
       return res.status(401).json({
         success: false,
         message: "Sai thông tin đăng nhập",
@@ -126,7 +131,6 @@ export const login = async (req: Request, res: Response) => {
     // Kiểm tra password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-      console.error(`❌ Login failed: Invalid password for email ${email}`);
       return res.status(401).json({
         success: false,
         message: "Sai thông tin đăng nhập",
@@ -135,29 +139,12 @@ export const login = async (req: Request, res: Response) => {
       } as ApiResponse);
     }
 
-    // Log successful login attempt (không log password)
-    console.log(`✅ Login successful: ${email} (${user._id})`);
-
     // Tạo token pair (access + refresh)
     const { accessToken, refreshToken } = generateTokenPair(user);
 
-    // Set access token vào cookie "token" cho authentication
-    res.cookie("token", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 15 * 60 * 1000, // 15 phút cho access token
-      path: "/",
-    });
-
-    // Gửi refresh token qua httpOnly cookie để bảo mật
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Chỉ gửi cookie qua HTTPS trong môi trường production
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" cho cross-origin trong production
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 ngày
-      path: "/", // Có thể truy cập từ tất cả các route
-    });
+    // Set cookies với options tự động detect production/HTTPS
+    setAccessTokenCookie(res, accessToken, req);
+    setRefreshTokenCookie(res, refreshToken, req);
 
     // Chỉ trả về access token và thông tin user (KHÔNG trả refresh token)
     return res.status(200).json({
@@ -171,6 +158,7 @@ export const login = async (req: Request, res: Response) => {
           username: user.username,
           fullname: user.fullname,
           avatar: user.avatar,
+          isAdmin: user.isAdmin,
         },
       },
       timestamp: new Date().toISOString(),
@@ -415,23 +403,9 @@ export const refreshToken = async (req: Request, res: Response) => {
     // Tạo token pair mới
     const tokens = generateTokenPair(user);
 
-    // Set access token mới vào cookie
-    res.cookie("token", tokens.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 15 * 60 * 1000, // 15 phút
-      path: "/",
-    });
-
-    // Gửi refresh token mới qua cookie
-    res.cookie("refreshToken", tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 ngày
-      path: "/",
-    });
+    // Set cookies mới với options tự động detect production/HTTPS
+    setAccessTokenCookie(res, tokens.accessToken, req);
+    setRefreshTokenCookie(res, tokens.refreshToken, req);
 
     return res.status(200).json({
       success: true,
@@ -472,13 +446,8 @@ export const logoutAllDevices = async (req: AuthRequest, res: Response) => {
       refreshToken: null,
     });
 
-    // Clear refresh token cookie
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
+    // Clear cookies với options phù hợp
+    clearAuthCookies(res, req);
 
     return res.status(200).json({
       success: true,
@@ -500,24 +469,43 @@ export const logoutAllDevices = async (req: AuthRequest, res: Response) => {
 // [POST] Logout Current Device - chỉ invalidate token hiện tại
 export const logoutCurrentDevice = async (req: AuthRequest, res: Response) => {
   try {
-    // Chỉ cần clear cookies, không cần check auth
-    // Vì có thể token đã hết hạn hoặc user đã logout rồi
+    const userId = req.user?.id;
+    const refreshToken = req.cookies?.refreshToken; // Lấy từ cookie thay vì body
 
-    // Clear access token cookie
-    res.clearCookie("token", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
 
-    // Clear refresh token cookie
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Refresh token is required",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Chỉ cần clear cookies, không cần check DB
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found",
+        data: null,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Chỉ clear cookies, không cần update DB
+    // Access token sẽ tự hết hạn sau 15 phút
+
+    // Clear cookies với options phù hợp
+    clearAuthCookies(res, req);
 
     return res.status(200).json({
       success: true,
@@ -527,13 +515,9 @@ export const logoutCurrentDevice = async (req: AuthRequest, res: Response) => {
     } as ApiResponse);
   } catch (error) {
     console.error("Logout current device error:", error);
-    // Vẫn clear cookies kể cả khi có lỗi
-    res.clearCookie("token", { path: "/" });
-    res.clearCookie("refreshToken", { path: "/" });
-    
-    return res.status(200).json({
-      success: true,
-      message: "Logout completed (cookies cleared)",
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
       data: null,
       timestamp: new Date().toISOString(),
     } as ApiResponse);
@@ -679,23 +663,9 @@ export const googleLogin = async (req: Request, res: Response) => {
     // Tạo token pair (access + refresh)
     const { accessToken, refreshToken } = generateTokenPair(user);
 
-    // Set access token vào cookie "token" cho authentication
-    res.cookie("token", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 15 * 60 * 1000, // 15 phút cho access token
-      path: "/",
-    });
-
-    // Gửi refresh token qua httpOnly cookie để bảo mật
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 ngày
-      path: "/",
-    });
+    // Set cookies với options tự động detect production/HTTPS
+    setAccessTokenCookie(res, accessToken, req);
+    setRefreshTokenCookie(res, refreshToken, req);
 
     // Trả về access token và thông tin user
     return res.status(200).json({
@@ -709,6 +679,7 @@ export const googleLogin = async (req: Request, res: Response) => {
           username: user.username,
           fullname: user.fullname,
           avatar: user.avatar,
+          isAdmin: user.isAdmin,
         },
       },
       timestamp: new Date().toISOString(),

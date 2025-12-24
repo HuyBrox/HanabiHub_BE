@@ -17,13 +17,16 @@ dotenv.config();
 
 const PORT: number = parseInt(process.env.PORT || "8080", 10);
 
+// Trust proxy để detect HTTPS từ X-Forwarded-Proto header (cần cho Render, Vercel, etc.)
+// Điều này quan trọng để cookies được set đúng với Secure flag
+app.set("trust proxy", 1);
+
 // Middleware
 app.use(helmet());
 app.use(morgan("combined"));
 app.use(cookieParser()); // Thêm cookie parser middleware
-// Accept larger payloads (images in base64 may be included in requests)
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const corsOptions = {
   origin: (
@@ -53,13 +56,25 @@ const corsOptions = {
     callback(new Error("Not allowed by CORS"));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "Cookie"], // Added "Cookie"
-  exposedHeaders: ["Set-Cookie"], // Added this line
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
+  exposedHeaders: ["Set-Cookie"],
   credentials: true, // Cho phép gửi cookies
 };
 app.use(cors(corsOptions));
 
-// Remove session middleware as we're using JWT
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "default_session_secret",
+    resave: false,
+    saveUninitialized: true,
+  })
+);
 
 // Tích hợp PeerServer vào HTTP server
 const peerServer = ExpressPeerServer(server, {

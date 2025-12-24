@@ -1,19 +1,55 @@
 import { Request, Response } from "express";
 import Post from "../models/post.model";
-import { ApiResponse, IPost, AuthRequest } from "../types";
+import Comment from "../models/comment.model";
+import { ApiResponse, IPost, AuthRequest, PostPlainObject } from "../types";
+import { uploadImage } from "../helpers/upload-media";
+import {
+  getCachedPosts,
+  cachePosts,
+  invalidatePostCache,
+  getCachedPostDetail,
+  cachePostDetail,
+  invalidatePostDetailCache,
+  invalidateAllPostCaches,
+} from "../utils/cache";
+import { io } from "../socket/socket-server";
 
-// [GET] /api/posts - Lấy tất cả posts
 export const getAllPosts = async (req: Request, res: Response) => {
   try {
-    const posts: IPost[] = await Post.find()
+    const cachedPosts = await getCachedPosts();
+    if (cachedPosts) {
+      return res.status(200).json({
+        success: true,
+        message: "Posts retrieved successfully (cached)",
+        data: cachedPosts,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    const posts = await Post.find()
       .populate("author", "fullname username avatar")
-      .populate("comments")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean() as PostPlainObject[];
+
+    const postsWithCommentCount = await Promise.all(
+      posts.map(async (post) => {
+        const commentCount = await Comment.countDocuments({
+          targetModel: "Post",
+          targetId: post._id,
+        });
+        return {
+          ...post,
+          commentCount,
+        };
+      })
+    );
+
+    await cachePosts(postsWithCommentCount);
 
     return res.status(200).json({
       success: true,
       message: "Posts retrieved successfully",
-      data: posts,
+      data: postsWithCommentCount,
       timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
@@ -27,13 +63,23 @@ export const getAllPosts = async (req: Request, res: Response) => {
   }
 };
 
-// [GET] /api/posts/:id - Lấy thông tin post theo ID
 export const getPost = async (req: Request, res: Response) => {
   try {
     const postId = req.params.id;
-    const post: IPost | null = await Post.findById(postId)
+
+    const cachedPost = await getCachedPostDetail(postId);
+    if (cachedPost) {
+      return res.status(200).json({
+        success: true,
+        message: "Post retrieved successfully (cached)",
+        data: cachedPost,
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    const post = await Post.findById(postId)
       .populate("author", "fullname username avatar")
-      .populate("comments");
+      .lean() as PostPlainObject | null;
 
     if (!post) {
       return res.status(404).json({
@@ -44,10 +90,22 @@ export const getPost = async (req: Request, res: Response) => {
       } as ApiResponse);
     }
 
+    const commentCount = await Comment.countDocuments({
+      targetModel: "Post",
+      targetId: postId,
+    });
+
+    const postWithCommentCount = {
+      ...post,
+      commentCount,
+    };
+
+    await cachePostDetail(postId, postWithCommentCount);
+
     return res.status(200).json({
       success: true,
       message: "Post retrieved successfully",
-      data: post,
+      data: postWithCommentCount,
       timestamp: new Date().toISOString(),
     } as ApiResponse);
   } catch (error) {
@@ -61,16 +119,11 @@ export const getPost = async (req: Request, res: Response) => {
   }
 };
 
-// [POST] /api/posts - Tạo post mới
 export const createPost = async (req: AuthRequest, res: Response) => {
   try {
-    const createData: {
-      title: string;
-      content: string;
-      images?: string[];
-      tags?: string[];
-    } = req.body;
-    const authorId = req.user?.id; // Giả sử có middleware auth
+    const { caption, desc } = req.body;
+    const authorId = req.user?.id;
+    const files = req.files as Express.Multer.File[];
 
     if (!authorId) {
       return res.status(401).json({
@@ -81,8 +134,28 @@ export const createPost = async (req: AuthRequest, res: Response) => {
       } as ApiResponse);
     }
 
+    let imageUrls: string[] = [];
+
+    if (files && files.length > 0) {
+      try {
+        imageUrls = await Promise.all(
+          files.map((file) => uploadImage({ buffer: file.buffer }))
+        );
+      } catch (uploadError) {
+        console.error("Error uploading images:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Error uploading images",
+          data: null,
+          timestamp: new Date().toISOString(),
+        } as ApiResponse);
+      }
+    }
+
     const newPost: IPost = new Post({
-      ...createData,
+      caption: caption || "",
+      desc: desc || "",
+      images: imageUrls,
       author: authorId,
       likes: [],
       comments: [],
@@ -90,6 +163,8 @@ export const createPost = async (req: AuthRequest, res: Response) => {
 
     const savedPost = await newPost.save();
     await savedPost.populate("author", "fullname username avatar");
+
+    await invalidatePostCache();
 
     return res.status(201).json({
       success: true,
@@ -108,17 +183,12 @@ export const createPost = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// [PUT] /api/posts/:id - Cập nhật post
 export const updatePost = async (req: AuthRequest, res: Response) => {
   try {
     const postId = req.params.id;
-    const updateData: {
-      title?: string;
-      content?: string;
-      images?: string[];
-      tags?: string[];
-    } = req.body;
+    const { caption, desc, images } = req.body;
     const userId = req.user?.id;
+    const files = req.files as Express.Multer.File[];
 
     const post: IPost | null = await Post.findById(postId);
 
@@ -131,7 +201,6 @@ export const updatePost = async (req: AuthRequest, res: Response) => {
       } as ApiResponse);
     }
 
-    // Kiểm tra quyền sở hữu
     if (post.author.toString() !== userId) {
       return res.status(403).json({
         success: false,
@@ -141,11 +210,36 @@ export const updatePost = async (req: AuthRequest, res: Response) => {
       } as ApiResponse);
     }
 
+    const updateData: any = {};
+    if (caption !== undefined) updateData.caption = caption;
+    if (desc !== undefined) updateData.desc = desc;
+
+    if (files && files.length > 0) {
+      try {
+        const imageUrls = await Promise.all(
+          files.map((file) => uploadImage({ buffer: file.buffer }))
+        );
+        updateData.images = imageUrls;
+      } catch (uploadError) {
+        console.error("Error uploading images:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Error uploading images",
+          data: null,
+          timestamp: new Date().toISOString(),
+        } as ApiResponse);
+      }
+    } else if (images !== undefined) {
+      updateData.images = images;
+    }
+
     const updatedPost: IPost | null = await Post.findByIdAndUpdate(
       postId,
       updateData,
       { new: true, runValidators: true }
     ).populate("author", "fullname username avatar");
+
+    await invalidateAllPostCaches(postId);
 
     return res.status(200).json({
       success: true,
@@ -164,7 +258,6 @@ export const updatePost = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// [DELETE] /api/posts/:id - Xóa post
 export const deletePost = async (req: AuthRequest, res: Response) => {
   try {
     const postId = req.params.id;
@@ -181,7 +274,6 @@ export const deletePost = async (req: AuthRequest, res: Response) => {
       } as ApiResponse);
     }
 
-    // Kiểm tra quyền sở hữu
     if (post.author.toString() !== userId) {
       return res.status(403).json({
         success: false,
@@ -191,7 +283,18 @@ export const deletePost = async (req: AuthRequest, res: Response) => {
       } as ApiResponse);
     }
 
+    await Comment.deleteMany({
+      targetModel: "Post",
+      targetId: postId,
+    });
+
     await Post.findByIdAndDelete(postId);
+
+    await invalidateAllPostCaches(postId);
+
+    io.emit("post:deleted", {
+      postId: postId.toString(),
+    });
 
     return res.status(200).json({
       success: true,
@@ -210,7 +313,6 @@ export const deletePost = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// [POST] /api/posts/:id/like - Like/Unlike post
 export const toggleLikePost = async (req: AuthRequest, res: Response) => {
   try {
     const postId = req.params.id;
@@ -239,14 +341,22 @@ export const toggleLikePost = async (req: AuthRequest, res: Response) => {
     const userIndex = post.likes.findIndex((id) => id.toString() === userId);
 
     if (userIndex === -1) {
-      // Like post
       post.likes.push(userId as any);
     } else {
-      // Unlike post
       post.likes.splice(userIndex, 1);
     }
 
     await post.save();
+
+    await invalidatePostDetailCache(postId);
+    await invalidatePostCache();
+
+    io.emit("post:liked", {
+      postId: postId.toString(),
+      userId: userId.toString(),
+      likes: post.likes.map((id) => id.toString()),
+      isLiked: userIndex === -1,
+    });
 
     return res.status(200).json({
       success: true,

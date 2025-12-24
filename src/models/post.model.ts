@@ -7,9 +7,9 @@ const postSchema = new Schema<IPost>({
         max: 500,
         default: "",
     },
-    img: {
+    images: [{
         type: String,
-    },
+    }],
     author: {
         type: mongoose.Schema.Types.ObjectId,
         ref: `User`,

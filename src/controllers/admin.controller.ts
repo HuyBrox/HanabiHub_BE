@@ -4,6 +4,8 @@ import { AuthRequest } from "../types/express.types";
 import { ApiResponse } from "src/types/api.types";
 import Course from "../models/course.model";
 import Post from "../models/post.model";
+import Lesson from "../models/lesson.model";
+import UserCourseProgress from "../models/user-course-progress.model";
 
 // Helper to get start of day
 function startOfDay(d: Date) {
@@ -350,4 +352,155 @@ export const getRecentUserActivities = async (
       .status(500)
       .json({ success: false, message: error.message } as ApiResponse);
   }
-};``
+};
+
+// [GET] /admin/course-stats - Thống kê tổng quan khóa học
+export const getCourseStats = async (req: AuthRequest, res: Response) => {
+  try {
+    const requester = req.user;
+    if (!requester)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    if (!requester.isAdmin)
+      return res.status(403).json({ success: false, message: "Forbidden" });
+
+    // 1. Tổng số khóa học
+    const totalCourses = await Course.countDocuments();
+
+    // 2. Tổng số bài học
+    const totalLessons = await Lesson.countDocuments();
+
+    // 3. Số học viên hoạt động (có progress > 0 hoặc status != "not_started")
+    const activeStudents = await UserCourseProgress.countDocuments({
+      $or: [
+        { progressPercentage: { $gt: 0 } },
+        { status: { $in: ["in_progress", "completed"] } },
+      ],
+    });
+
+    // 4. Tỷ lệ hoàn thành: số course completed / tổng số course đã enroll
+    const totalEnrollments = await UserCourseProgress.countDocuments();
+    const completedCourses = await UserCourseProgress.countDocuments({
+      status: "completed",
+    });
+    const completionRate =
+      totalEnrollments > 0
+        ? Math.round((completedCourses / totalEnrollments) * 100)
+        : 0;
+
+    return res.json({
+      success: true,
+      data: {
+        totalCourses,
+        totalLessons,
+        activeStudents,
+        completionRate,
+      },
+    } as ApiResponse);
+  } catch (error: any) {
+    console.error("getCourseStats error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: error.message } as ApiResponse);
+  }
+};
+
+// [GET] /admin/course-growth - Thống kê tăng trưởng khóa học và bài học theo tháng
+export const getCourseGrowth = async (req: AuthRequest, res: Response) => {
+  try {
+    const requester = req.user;
+    if (!requester)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    if (!requester.isAdmin)
+      return res.status(403).json({ success: false, message: "Forbidden" });
+
+    const now = new Date();
+    const months = 6; // Lấy 6 tháng gần nhất
+    const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+
+    // Thống kê courses theo tháng
+    const courseGrowth = await Course.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m", date: "$createdAt" },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Thống kê lessons theo tháng
+    const lessonGrowth = await Lesson.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m", date: "$createdAt" },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Tạo map để dễ truy cập
+    const courseMap: Record<string, number> = {};
+    courseGrowth.forEach((r: any) => {
+      courseMap[r._id] = r.count;
+    });
+
+    const lessonMap: Record<string, number> = {};
+    lessonGrowth.forEach((r: any) => {
+      lessonMap[r._id] = r.count;
+    });
+
+    // Build series đầy đủ cho 6 tháng
+    const courseSeries: { month: string; value: number }[] = [];
+    const lessonSeries: { month: string; value: number }[] = [];
+    let cumulativeCourses = 0;
+    let cumulativeLessons = 0;
+
+    for (let i = 0; i < months; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - months + 1 + i, 1);
+      const monthKey = d.toISOString().slice(0, 7); // YYYY-MM
+      const monthLabel = `T${d.getMonth() + 1}`;
+
+      // Tính cumulative (tổng tích lũy)
+      cumulativeCourses += courseMap[monthKey] || 0;
+      cumulativeLessons += lessonMap[monthKey] || 0;
+
+      courseSeries.push({
+        month: monthLabel,
+        value: cumulativeCourses,
+      });
+
+      lessonSeries.push({
+        month: monthLabel,
+        value: cumulativeLessons,
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        courses: courseSeries,
+        lessons: lessonSeries,
+      },
+    } as ApiResponse);
+  } catch (error: any) {
+    console.error("getCourseGrowth error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: error.message } as ApiResponse);
+  }
+};

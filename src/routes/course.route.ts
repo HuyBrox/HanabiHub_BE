@@ -10,6 +10,7 @@ import {
   deleteLesson,
   getLessonById,
   upLoadAudioForTask,
+  rateCourse,
 } from "../controllers/course.controller";
 import { isAuth, isAdmin } from "../middleware/isAuth";
 import multer from "../middleware/multer";
@@ -22,6 +23,9 @@ router.get("/", isAuth, getAllCourses);
 
 // Lấy chi tiết khoá học (Public)
 router.get("/:id", isAuth, getCourseById);
+
+// Đánh giá khóa học (Auth required)
+router.post("/:id/rate", isAuth, rateCourse);
 
 // Tạo mới khoá học (Admin only)
 router.post("/", isAdmin, multer.single("thumbnail"), createCourse);

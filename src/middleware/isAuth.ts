@@ -9,23 +9,21 @@ export const isAuth = (
   next: NextFunction
 ): void => {
   try {
-    // Đọc token từ cookie hoặc Authorization header
-    let token = req.cookies.token;
-    
-    // Nếu không có token trong cookie, thử đọc từ Authorization header
-    if (!token && req.headers.authorization) {
-      const authHeader = req.headers.authorization;
-      if (authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7);
-      }
-    }
-    
-    console.log("=== isAuth middleware ===");
-    console.log("Token from cookie:", req.cookies.token ? "Token found" : "No token");
-    console.log("Token from header:", req.headers.authorization ? "Token found" : "No token");
-    console.log("Final token:", token ? "Token found" : "No token");
+    // Đọc token từ cookie thay vì Authorization header
+    const token = req.cookies.token;
 
     if (!token) {
+      // Log thông tin về cookies để debug (chỉ trong development hoặc khi có lỗi)
+      if (process.env.NODE_ENV === "development") {
+        console.log("[isAuth] No token found. Cookies:", {
+          hasCookies: !!req.cookies,
+          cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
+          allCookies: req.cookies,
+          origin: req.headers.origin,
+          referer: req.headers.referer,
+        });
+      }
+
       res.status(401).json({
         success: false,
         message: "Không có token, truy cập bị từ chối.",
@@ -37,18 +35,16 @@ export const isAuth = (
 
     // Verify access token
     const decoded = verifyAccessToken(token);
-    console.log("Decoded token:", decoded);
     req.user = {
       id: decoded.id,
       email: decoded.email,
       isAdmin: decoded.isAdmin || false,
       name: decoded.email, // temporary fallback
     };
-    console.log("req.user set to:", req.user);
 
     next();
   } catch (error) {
-    console.log("Token verification error:", error);
+    console.error("Token verification error:", error);
     res.status(401).json({
       success: false,
       message: "Access token không hợp lệ hoặc đã hết hạn",
@@ -66,16 +62,7 @@ export const isAdmin = (
   try {
     // Nếu chưa có req.user, tự verify token
     if (!req.user) {
-      // Đọc token từ cookie hoặc Authorization header
-      let token = req.cookies.token;
-      
-      // Nếu không có token trong cookie, thử đọc từ Authorization header
-      if (!token && req.headers.authorization) {
-        const authHeader = req.headers.authorization;
-        if (authHeader.startsWith('Bearer ')) {
-          token = authHeader.substring(7);
-        }
-      }
+      const token = req.cookies.token;
 
       if (!token) {
         res.status(401).json({

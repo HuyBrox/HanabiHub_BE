@@ -12,13 +12,13 @@ import {
   getWeeklyProgress,
   getUserAchievements,
   getUserInsights,
+  searchUsers,
   followUser,
   unfollowUser,
-  getMyFriends,
   getFriends,
-  searchUsers,
+  getMyFriends,
 } from "../controllers/user.controller";
-import { isAuth, isAdmin } from "../middleware/isAuth";
+import { isAuth } from "../middleware/isAuth";
 import { validate, updateUserSchema } from "../validators";
 import upload from "../middleware/multer";
 const router = Router();
@@ -65,10 +65,13 @@ router.delete("/", isAuth, deleteUser);
 // Thay đổi email
 router.patch("/change-email", isAuth, changeEmail);
 
+<<<<<<< HEAD
 // Admin routes for user management
 // Tìm kiếm users cho admin (gửi thông báo)
 router.get("/search", isAdmin, searchUsers);
 // Thống kê users cho admin
 router.get("/stats", isAdmin, getUserStats);
 
+=======
+>>>>>>> d7751db69cab86624233157c475624ce06eb9d3c
 export default router;

@@ -22,7 +22,7 @@ router.post("/login", validate(loginSchema), login);
 router.post("/google", googleLogin); // Google OAuth2 login
 router.post("/refresh-token", refreshToken);
 router.post("/logout-all", isAuth, logoutAllDevices); // Logout tất cả thiết bị
-router.post("/logout", logoutCurrentDevice); // Logout thiết bị hiện tại (không cần auth vì có thể token đã hết hạn)
+router.post("/logout", isAuth, logoutCurrentDevice); // Logout thiết bị hiện tại
 
 // OTP routes
 router.post("/verify-otp", verifyOtpForRegistration);
