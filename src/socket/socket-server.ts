@@ -1009,6 +1009,40 @@ io.on("connection", (socket) => {
     handleSendPeerId(socket, { ...data, callerId: userId });
   });
 
+  // Handle call media state (mic/video sync)
+  socket.on("callMediaState", (data) => {
+    try {
+      const { receiverId, isMuted, isVideoOff } = data;
+      if (!receiverId) {
+        socket.emit("callError", {
+          message: "Missing receiverId",
+          code: "INVALID_DATA",
+        });
+        return;
+      }
+
+      // Gửi media state tới receiver
+      const receiverSockets = getReceiverSocketIds(receiverId);
+      receiverSockets.forEach((socketId: string) => {
+        io.to(socketId).emit("partnerMediaState", {
+          callerId: userId,
+          isMuted: isMuted || false,
+          isVideoOff: isVideoOff || false,
+        });
+      });
+
+      logger.info(
+        `📞 Media state sync: ${userId} → ${receiverId} (muted: ${isMuted}, videoOff: ${isVideoOff})`
+      );
+    } catch (error) {
+      logger.error("Error handling call media state:", error);
+      socket.emit("callError", {
+        message: "Failed to sync media state",
+        code: "MEDIA_STATE_ERROR",
+      });
+    }
+  });
+
   // === RANDOM CALL EVENTS ===
   // Join random call queue
   socket.on("joinRandomQueue", (data) => {
