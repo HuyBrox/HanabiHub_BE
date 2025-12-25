@@ -11,6 +11,7 @@ import userActivityRoutes from "./user-activity.route";
 import courseRoutes from "./course.route";
 import userCourseProgressRoutes from "./user-course-progress.route";
 import learningInsightsRoutes from "./learning-insights.route";
+import vnpayRouter from "./vnpay.route";
 
 // ✅ import router users.admin (đúng path, KHÔNG lồng thêm /routes)
 import usersAdminRoute from "./usersAdmin.route";
@@ -19,6 +20,8 @@ const router: Router = Router();
 
 // Auth routes
 router.use("", authRoutes);
+
+router.use("/payments/vnpay", vnpayRouter);
 
 // User routes
 router.use("/user", userRoutes);

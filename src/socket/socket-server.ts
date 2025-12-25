@@ -75,7 +75,8 @@ const io = new Server(server, {
   pingTimeout: 60000, // Thời gian chờ pong trả về trước khi disconnect (60 giây)
   upgradeTimeout: 25000, // Thời gian chờ upgrade từ polling lên websocket (25 giây)
   maxHttpBufferSize: 1e6, // Giới hạn kích thước buffer (1MB)
-  transports: ["polling", "websocket"], // Cho phép cả polling và websocket
+  transports: ["websocket", "polling"], // Ưu tiên websocket, fallback polling
+  allowEIO3: true, // Hỗ trợ cả EIO3 và EIO4
 });
 
 // Chuyển userId thành ObjectId để tương thích với MongoDB
@@ -205,7 +206,7 @@ const startCall = (
     callerId,
     receiverId,
     callType,
-    startTime: new Date()
+    startTime: new Date(),
   };
 
   if (randomCallId) {
@@ -214,7 +215,11 @@ const startCall = (
 
   activeCall[callerId] = callData;
   activeCall[receiverId] = callData;
-  logger.info(`📞 Bắt đầu cuộc gọi ${callType}: ${callerId} → ${receiverId}${randomCallId ? ' (Random)' : ''}`);
+  logger.info(
+    `📞 Bắt đầu cuộc gọi ${callType}: ${callerId} → ${receiverId}${
+      randomCallId ? " (Random)" : ""
+    }`
+  );
 };
 
 // Kết thúc cuộc gọi
@@ -258,10 +263,7 @@ const addToRandomQueue = (
     busy: false,
     joinedAt: new Date(),
   };
-  logger.info(
-    `🎲 User ${userId} joined random queue with filters:`,
-    filters
-  );
+  logger.info(`🎲 User ${userId} joined random queue with filters:`, filters);
 };
 
 // Remove user khỏi random call queue
@@ -294,9 +296,7 @@ const setUserBusy = (socketId: string, busy: boolean): void => {
 };
 
 // Tìm match cho user trong queue
-const findMatch = (
-  currentUser: RandomCallUser
-): RandomCallUser | null => {
+const findMatch = (currentUser: RandomCallUser): RandomCallUser | null => {
   const { userId, filters, socketId } = currentUser;
 
   // Tìm trong queue
@@ -1082,9 +1082,10 @@ io.on("connection", (socket) => {
             user2Id: new mongoose.Types.ObjectId(match.userId),
             user1Level: currentUser.filters.level,
             user2Level: match.filters.level,
-            matchedLevel: currentUser.filters.level === match.filters.level
-              ? currentUser.filters.level
-              : "NO_FILTER",
+            matchedLevel:
+              currentUser.filters.level === match.filters.level
+                ? currentUser.filters.level
+                : "NO_FILTER",
             callType: "video",
             status: "ongoing",
           });
@@ -1202,7 +1203,9 @@ io.on("connection", (socket) => {
 
       const callId = callInfo.randomCallId;
       const callStartTime = callInfo.startTime;
-      const callDuration = Math.floor((Date.now() - callStartTime.getTime()) / 1000);
+      const callDuration = Math.floor(
+        (Date.now() - callStartTime.getTime()) / 1000
+      );
 
       // Kết thúc cuộc gọi
       endCall(userId, partnerId);
@@ -1214,7 +1217,9 @@ io.on("connection", (socket) => {
           duration: callDuration,
           endedAt: new Date(),
         });
-        logger.success(`📝 Updated RandomCall ${callId} - Duration: ${callDuration}s`);
+        logger.success(
+          `📝 Updated RandomCall ${callId} - Duration: ${callDuration}s`
+        );
       } catch (error) {
         logger.error("Error updating RandomCall document:", error);
       }
@@ -1236,7 +1241,8 @@ io.on("connection", (socket) => {
           difficulty = "easy";
         }
 
-        const UserActivity = (await import("../models/user-activity.model")).default;
+        const UserActivity = (await import("../models/user-activity.model"))
+          .default;
 
         await UserActivity.findOneAndUpdate(
           { userId: new mongoose.Types.ObjectId(userId) },
@@ -1252,18 +1258,24 @@ io.on("connection", (socket) => {
             $inc: {
               "callStats.totalCalls": 1,
               "callStats.totalDuration": callDuration,
-              [`callStats.${isCorrect ? 'correctCalls' : 'incorrectCalls'}`]: 1,
+              [`callStats.${isCorrect ? "correctCalls" : "incorrectCalls"}`]: 1,
             },
           },
           { upsert: true }
         );
 
-        logger.success(`📊 Tracked call activity for ${userId}: ${callDuration}s (${difficulty}, ${isCorrect ? 'correct' : 'incorrect'})`);
+        logger.success(
+          `📊 Tracked call activity for ${userId}: ${callDuration}s (${difficulty}, ${
+            isCorrect ? "correct" : "incorrect"
+          })`
+        );
       } catch (error) {
         logger.error("Error tracking call activity:", error);
       }
 
-      logger.info(`🎲 Random call ended: ${userId} ↔ ${partnerId} - Duration: ${callDuration}s`);
+      logger.info(
+        `🎲 Random call ended: ${userId} ↔ ${partnerId} - Duration: ${callDuration}s`
+      );
     } catch (error) {
       logger.error("Error ending random call:", error);
     }
@@ -1290,12 +1302,16 @@ io.on("connection", (socket) => {
         return;
       }
 
-      logger.info(`🎲 User ${userId} wants next partner (current: ${currentPartnerId})`);
+      logger.info(
+        `🎲 User ${userId} wants next partner (current: ${currentPartnerId})`
+      );
 
       // 1. End current call
       const callInfo = getUserCallInfo(userId);
       if (callInfo && callInfo.randomCallId) {
-        const callDuration = Math.floor((Date.now() - callInfo.startTime.getTime()) / 1000);
+        const callDuration = Math.floor(
+          (Date.now() - callInfo.startTime.getTime()) / 1000
+        );
 
         // Update RandomCall document
         try {
@@ -1342,9 +1358,10 @@ io.on("connection", (socket) => {
             user2Id: new mongoose.Types.ObjectId(match.userId),
             user1Level: currentUser.filters.level,
             user2Level: match.filters.level,
-            matchedLevel: currentUser.filters.level === match.filters.level
-              ? currentUser.filters.level
-              : "NO_FILTER",
+            matchedLevel:
+              currentUser.filters.level === match.filters.level
+                ? currentUser.filters.level
+                : "NO_FILTER",
             callType: "video",
             status: "ongoing",
           });
@@ -1407,24 +1424,39 @@ io.on("connection", (socket) => {
         return;
       }
 
-      logger.info(`⭐ User ${userId} rated partner ${partnerId} with ${rating} stars`);
+      logger.info(
+        `⭐ User ${userId} rated partner ${partnerId} with ${rating} stars`
+      );
 
       // Get call info to calculate current duration
       const callInfo = getUserCallInfo(userId);
       let callDuration = 0;
 
       if (callInfo && callInfo.startTime) {
-        callDuration = Math.floor((Date.now() - callInfo.startTime.getTime()) / 1000);
+        callDuration = Math.floor(
+          (Date.now() - callInfo.startTime.getTime()) / 1000
+        );
       }
 
       // ✅ Adjust skill scores for listening + speaking based on rating
       // Rating 5 → +5, Rating 4 → +3, Rating 3 → +1, Rating 2 → -2, Rating 1 → -4
       // Logic: Cộng điểm cho PARTNER (người được rate), không phải người rate
-      const pointsToAdd = rating === 5 ? 5 : rating === 4 ? 3 : rating === 3 ? 1 : rating === 2 ? -2 : -4;
+      const pointsToAdd =
+        rating === 5
+          ? 5
+          : rating === 4
+          ? 3
+          : rating === 3
+          ? 1
+          : rating === 2
+          ? -2
+          : -4;
 
       try {
         // Update both listening and speaking skills for PARTNER
-        console.log(`💾 [RATING] Updating skills for partner ${partnerId} with ${pointsToAdd} points...`);
+        console.log(
+          `💾 [RATING] Updating skills for partner ${partnerId} with ${pointsToAdd} points...`
+        );
         const updateResult = await LearningInsights.findOneAndUpdate(
           { userId: new mongoose.Types.ObjectId(partnerId) }, // ✅ Update partnerId, not userId
           {
@@ -1433,8 +1465,10 @@ io.on("connection", (socket) => {
               "learningAnalysis.skillMastery.speaking.level": pointsToAdd,
             },
             $set: {
-              "learningAnalysis.skillMastery.listening.lastPracticed": new Date(),
-              "learningAnalysis.skillMastery.speaking.lastPracticed": new Date(),
+              "learningAnalysis.skillMastery.listening.lastPracticed":
+                new Date(),
+              "learningAnalysis.skillMastery.speaking.lastPracticed":
+                new Date(),
             },
           },
           { upsert: true, new: true }
@@ -1443,11 +1477,17 @@ io.on("connection", (socket) => {
         console.log(`✅ [RATING] Update result:`, {
           partnerId,
           pointsAdded: pointsToAdd,
-          newListeningLevel: updateResult?.learningAnalysis?.skillMastery?.listening?.level,
-          newSpeakingLevel: updateResult?.learningAnalysis?.skillMastery?.speaking?.level,
+          newListeningLevel:
+            updateResult?.learningAnalysis?.skillMastery?.listening?.level,
+          newSpeakingLevel:
+            updateResult?.learningAnalysis?.skillMastery?.speaking?.level,
         });
 
-        logger.success(`📊 Adjusted skill scores for PARTNER ${partnerId}: listening/speaking ${pointsToAdd > 0 ? '+' : ''}${pointsToAdd} points (rated by ${userId})`);
+        logger.success(
+          `📊 Adjusted skill scores for PARTNER ${partnerId}: listening/speaking ${
+            pointsToAdd > 0 ? "+" : ""
+          }${pointsToAdd} points (rated by ${userId})`
+        );
       } catch (error) {
         logger.error("Error adjusting skill scores:", error);
       }
@@ -1474,7 +1514,11 @@ io.on("connection", (socket) => {
         currentCallDuration: callDuration,
       });
 
-      logger.success(`⭐ Rating processed: ${userId} → ${partnerId} (${rating}⭐) | Duration: ${callDuration}s | Points: ${pointsToAdd > 0 ? '+' : ''}${pointsToAdd}`);
+      logger.success(
+        `⭐ Rating processed: ${userId} → ${partnerId} (${rating}⭐) | Duration: ${callDuration}s | Points: ${
+          pointsToAdd > 0 ? "+" : ""
+        }${pointsToAdd}`
+      );
     } catch (error) {
       logger.error("Error handling rate partner:", error);
       socket.emit("randomCallError", {

@@ -12,6 +12,7 @@ import { app, server } from "./socket/socket-server";
 import routes from "./routes";
 import connectDB from "./utils/db";
 import { cleanup as cleanupLearningTracker } from "./middleware/learning-tracker";
+import enrollmentsRouter from "./routes/enrollment.route";
 
 dotenv.config();
 
@@ -75,6 +76,8 @@ app.use(
     saveUninitialized: true,
   })
 );
+
+app.use("/api/v1/enrollments", enrollmentsRouter);
 
 // Tích hợp PeerServer vào HTTP server
 const peerServer = ExpressPeerServer(server, {
