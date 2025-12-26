@@ -24,11 +24,14 @@ router.get("/", isAuth, getAllCourses);
 // Lấy chi tiết khoá học (Public)
 router.get("/:id", isAuth, getCourseById);
 
+// Tạo mới khoá học (Admin only) - Route cụ thể /create để tránh conflict với /:id
+// Đặt trước các route có params để đảm bảo khớp đúng
+router.post("/create", isAdmin, multer.single("thumbnail"), createCourse);
+// Route cũ vẫn giữ để backward compatibility
+router.post("/", isAdmin, multer.single("thumbnail"), createCourse);
+
 // Đánh giá khóa học (Auth required)
 router.post("/:id/rate", isAuth, rateCourse);
-
-// Tạo mới khoá học (Admin only)
-router.post("/", isAdmin, multer.single("thumbnail"), createCourse);
 
 // Cập nhật khoá học (Admin only)
 router.put("/:id", isAdmin, multer.single("thumbnail"), updateCourse);
